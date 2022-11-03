@@ -26,12 +26,12 @@ int main(int argc, char *argv[])
     TString dir = getenv("VMCWORKDIR");
 
     TString geoManFile =
-        "/mnt/simulations/attpcroot/fair_install_2020/R3BRoot/glad-tpc/geometry/HYDRA_Prototype.geoMan.root";
+        dir + "/glad-tpc/geometry/HYDRA_Prototype.geoMan.root";
 
     std::cout << " Geometry file : " << geoManFile.Data() << "\n";
 
     TString fileName =
-        "/mnt/simulations/attpcroot/fair_install_2020/R3BRoot/glad-tpc/macros/tracking/output_tracking.root";
+        dir + "/glad-tpc/macros/tracking/output_tracking.root";
     TFile* file = new TFile(fileName.Data(), "READ");
 
     // GENFIT geometry
@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 
     // Target
     genfit::SharedPlanePtr fTargetPlane;
-    TVector3 posTargetIni(-2.46, 0.0, 232.7);
+    TVector3 posTargetIni(-2.7, 0.0, 227.0);
     TVector3 normalTarget(0, 0, 1);
     fTargetPlane = genfit::SharedPlanePtr(new genfit::DetPlane(posTargetIni, normalTarget));
 

@@ -16,7 +16,7 @@ void run_tracking(TString fileName = "output_reco.root")
 
   inFile = workDir + "/glad-tpc/macros/reco/" + fileName;
   outFile = workDir + "/glad-tpc/macros/tracking/output_tracking.root";
-  GTPCTrackParamsFile = workDir + "/glad-tpc/params/Hit_FileSetup.par";
+  GTPCTrackParamsFile = workDir + "/glad-tpc/params/HYDRAprototype_FileSetup_v2_02082022.par";
 
   // -----   Create analysis run   ----------------------------------------
   FairRunAna* fRun = new FairRunAna();
