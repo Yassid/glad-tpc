@@ -226,9 +226,9 @@ void R3BGTPCEventDrawTask::DrawHitPoints()
         Double_t z = hitData[i]->GetZ();
         Double_t E = hitData[i]->GetEnergy();
 
-         //std::cout<<x<<" "<<y<<" "<<z<<" "<<"\n";
+        // std::cout<<x<<" "<<y<<" "<<z<<" "<<"\n";
 
-        fHitSet->SetNextPoint(x-XOffset, y, z-ZOffset); // cm
+        fHitSet->SetNextPoint(x - XOffset, y, z - ZOffset); // cm
         fHitSet->SetPointId(new TNamed(Form("Hit %d", i), ""));
         // NB: X and Z are swapped in the pad plane
         //    PadPlane frame for visualization

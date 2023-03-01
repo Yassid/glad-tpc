@@ -10,6 +10,7 @@ int main(int argc, char *argv[])
 
     // Histograms
     TH1F* momentum = new TH1F("momentum", "momentum", 1000, 0, 2.0);
+    TH1F* momentumXtr = new TH1F("momentumXtr", "momentumXtr", 1000, 0, 2.0);
     TH1F* energy = new TH1F("energy", "energy", 1000, 0, 2.0);
     TH2F* XYVertex = new TH2F("XYVertex", "XYVertex", 1000, -25, 25, 1000, -25, 25);
     TH2F* XZVertex = new TH2F("XZVertex", "XZVertex", 1000, -25, 25, 1000, 200, 300);
@@ -25,18 +26,18 @@ int main(int argc, char *argv[])
     // Paths
     TString dir = getenv("VMCWORKDIR");
 
-    TString geoManFile =
-        dir + "/glad-tpc/geometry/HYDRA_Prototype.geoMan.root";
+    TString geoManFile = dir + "/glad-tpc/geometry/HYDRA_Prototype.geoMan_v2.root";
 
     std::cout << " Geometry file : " << geoManFile.Data() << "\n";
 
-    TString fileName =
-        dir + "/glad-tpc/macros/tracking/output_tracking.root";
+    TString fileName = dir + "/glad-tpc/macros/tracking/output_tracking.root";
     TFile* file = new TFile(fileName.Data(), "READ");
 
     // GENFIT geometry
     new TGeoManager("Geometry", "HYDRA geometry");
     TGeoManager::Import(geoManFile.Data());
+     genfit::FieldManager::getInstance()->init(new genfit::ConstField(0.0, 40.0, 0.0)); //
+     genfit::FieldManager::getInstance()->useCache(true, 8);
     genfit::MaterialEffects::getInstance()->init(new genfit::TGeoMaterialInterface());
     // genfit::MaterialEffects::getInstance()->setNoEffects(true);
     // genfit::MaterialEffects::getInstance()->ignoreBoundariesBetweenEqualMaterials(true);
@@ -45,7 +46,7 @@ int main(int argc, char *argv[])
     // genfit::MaterialEffects::getInstance()->setNoiseBetheBloch(false);
     // genfit::MaterialEffects::getInstance()->setNoiseBrems(false);
     // genfit::MaterialEffects::getInstance()->setNoiseCoulomb(false);
-    genfit::FieldManager::getInstance()->init(new genfit::ConstField(0.0, 20.0, 0.0)); //
+
 
     // Target
     genfit::SharedPlanePtr fTargetPlane;
@@ -140,8 +141,8 @@ int main(int argc, char *argv[])
                    {
 
                        genfit::MaterialEffects::getInstance()->setNoEffects(true);
-                       trackRep->extrapolateToPoint(fitState, posTargetIni);
-                       // trackRep -> extrapolateToPlane(fitState, fTargetPlane);
+		        trackRep->extrapolateToPoint(fitState, posTargetIni);
+                       //trackRep -> extrapolateToPlane(fitState, fTargetPlane);
                        momTarget = fitState.getMom();
                        posTarget = fitState.getPos();
 
@@ -174,6 +175,7 @@ int main(int argc, char *argv[])
                        xVertexH->Fill(posTarget.X());
                        yVertexH->Fill(posTarget.Y());
                        zVertexH->Fill(posTarget.Z());
+		       momentumXtr->Fill(momTarget.Mag());
                    }
                    catch (genfit::Exception& e)
                    {
@@ -209,7 +211,7 @@ int main(int argc, char *argv[])
        XZVertex->Draw("zcol");
 
        TCanvas* c2 = new TCanvas();
-       c2->Divide(2, 3);
+       c2->Divide(3, 3);
        c2->cd(1);
        thetaIniH->Draw();
        c2->cd(2);
@@ -221,6 +223,8 @@ int main(int argc, char *argv[])
        phiH->Draw();
        c2->cd(5);
        phiDeltaH->Draw();
+       c2->cd(6);
+       momentumXtr->Draw();
 
        TCanvas* c3 = new TCanvas();
        c3->Divide(2, 2);

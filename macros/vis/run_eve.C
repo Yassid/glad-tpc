@@ -1,6 +1,6 @@
-void run_eve(TString InputDataFile = "output_reco.root",
+void run_eve(TString InputDataFile = "output_tracking.root",
              TString OutputDataFile = "output.reco_display.root",
-             TString unpackDir = "/glad-tpc/macros/reco/")
+             TString unpackDir = "/glad-tpc/macros/tracking/")
 {
     FairLogger* fLogger = FairLogger::GetLogger();
     fLogger->SetLogToScreen(kTRUE);

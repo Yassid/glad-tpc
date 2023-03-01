@@ -47,7 +47,7 @@ R3BGTPCFitter::R3BGTPCFitter()
 {
   fTPCDetID = 0;
   fPDGCode = 211;
-  
+
   fKalmanFitter = std::make_shared<genfit::KalmanFitterRefTrack>();
   fKalmanFitter->setMinIterations(5);
   fKalmanFitter->setMaxIterations(20);
@@ -60,7 +60,7 @@ R3BGTPCFitter::R3BGTPCFitter()
   fMeasurementFactory = new genfit::MeasurementFactory<genfit::AbsMeasurement>();
   fMeasurementFactory->addProducer(fTPCDetID, fMeasurementProducer);
 
-  genfit::FieldManager::getInstance()->init(new genfit::ConstField(0.0, 20.0, 0.0)); // kGauss
+  genfit::FieldManager::getInstance()->init(new genfit::ConstField(0.0, 40.0, 0.0)); // kGauss
   genfit::MaterialEffects *materialEffects = genfit::MaterialEffects::getInstance();
   materialEffects->init(new genfit::TGeoMaterialInterface());
 }
@@ -77,11 +77,11 @@ R3BGTPCFitter::~R3BGTPCFitter()
 void R3BGTPCFitter::Init()
 {
    std::cout << cGREEN << " R3BGTPCFitter::Init() " << cNORMAL << "\n";
-   
+
    fHitClusterArray->Delete();
    fGenfitTrackArray->Delete();
 }
-   
+
 genfit::Track *R3BGTPCFitter::FitTrack(R3BGTPCTrackData* track)
 {
    fHitClusterArray->Delete();
@@ -100,15 +100,15 @@ genfit::Track *R3BGTPCFitter::FitTrack(R3BGTPCTrackData* track)
     Int_t idx = fHitClusterArray->GetEntriesFast();
     new ((*fHitClusterArray)[idx]) R3BGTPCHitClusterData(cluster);
     trackCand.addHit(fTPCDetID, idx);
-    
+
    }
 
-   auto iniCluster = hitClusterArray->front(); 
+   auto iniCluster = hitClusterArray->front();
    auto endCluster = hitClusterArray->back();
 
    std::cout<<" Initial cluster "<<iniCluster.GetX()<<"  "<<iniCluster.GetY()<<"  "<<iniCluster.GetZ()<<"\n";
    //std::cout<<" End cluster "<<endCluster.GetX()<<"  "<<endCluster.GetY()<<"  "<<endCluster.GetZ()<<"\n";
-   
+
    TVector3  posSeed( iniCluster.GetX(), iniCluster.GetY(), iniCluster.GetZ());
    posSeed.SetMag(posSeed.Mag());
 
@@ -123,7 +123,7 @@ genfit::Track *R3BGTPCFitter::FitTrack(R3BGTPCTrackData* track)
    for (Int_t iComp = 3; iComp < 6; iComp++)
       covSeed(iComp, iComp) = covSeed(iComp - 3, iComp - 3);
 
-   TVector3 momSeed(0.0, 0.0, 0.1);
+   TVector3 momSeed(0.0, 0.0, 0.8);
    momSeed.SetTheta(TMath::Pi() / 2.0);
    // momSeed.SetPhi(0);
    trackCand.setCovSeed(covSeed);
@@ -136,7 +136,7 @@ genfit::Track *R3BGTPCFitter::FitTrack(R3BGTPCTrackData* track)
    gfTrack->addTrackRep(new genfit::RKTrackRep(fPDGCode));
 
    auto *trackRep = dynamic_cast<genfit::RKTrackRep *>(gfTrack->getTrackRep(0));
-   
+
 
    try {
       fKalmanFitter->processTrackWithRep(gfTrack, trackRep, false);
@@ -190,4 +190,4 @@ genfit::Track *R3BGTPCFitter::FitTrack(R3BGTPCTrackData* track)
              << "\n";
 
    return gfTrack;
-}  
+}
