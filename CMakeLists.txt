@@ -13,6 +13,7 @@ message(STATUS "${BBlue}GTPC project was FOUND${CR} ")
 message("    - ${Cyan}GTPC_DIR${CR} = ${BGreen}${R3BGTPC_SOURCE_DIR}${CR}")
 
 #glad-tpc specific
+add_subdirectory (openkf)
 add_subdirectory (gtpcdata)
 #if (WITH_UCESB)
 #add_subdirectory (gtpcsource)

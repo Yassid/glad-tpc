@@ -22,7 +22,8 @@ set(SRCS
     R3BGTPCCalData.cxx
     R3BGTPCHitData.cxx
     R3BGTPCHitClusterData.cxx
-    R3BGTPCTrackData.cxx)
+    R3BGTPCTrackData.cxx
+    R3BGTPCFittedTrackData.cxx)
 
 # fill list of header files from list of source files
 # by exchanging the file extension

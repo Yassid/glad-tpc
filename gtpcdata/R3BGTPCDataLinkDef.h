@@ -13,4 +13,6 @@
 #pragma link C++ class R3BGTPCHitData + ;
 #pragma link C++ class R3BGTPCHitClusterData + ;
 #pragma link C++ class R3BGTPCTrackData + ;
+#pragma link C++ class R3BGTPCFittedTrackData + ;
+#pragma link C++ class R3BGTPCFittedTrackData::Kinematics + ;
 #endif

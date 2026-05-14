@@ -33,6 +33,7 @@ set(SRCS
     triplclust/src/util.cxx
     triplclust/src/graph.cxx
     R3BGTPCTrackFinder.cxx
+    R3BGTPCFitterUKF.cxx
 )
 
 if(GENFIT2_FOUND)
@@ -62,7 +63,10 @@ add_library_with_dictionary(
     INCLUDEDIRS
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/triplclust/src
+        ${CMAKE_SOURCE_DIR}/glad-tpc/openkf
+        ${CMAKE_SOURCE_DIR}/glad-tpc/openkf/kalman_filter
         ${EXTRA_INCLUDE_DIRS}
     DEPENDENCIES
         R3BGTPCData
+        R3BOpenKF
 )
