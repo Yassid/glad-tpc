@@ -59,14 +59,16 @@ double R3BGTPCFitterUKF::GetSeedMomentum(R3BGTPCTrackData* track) const
         return fMomentumSeed;
 
     // Brho seed from the PRA circle: p_T = 0.3 · B · R, then divide by sin(θ).
-    // GeoRadius is in mm, B field in T, theta in rad. Returns p in MeV/c.
-    const double R_mm = track->GetGeoRadius();
-    if (!std::isfinite(R_mm) || R_mm <= 0)
+    // GeoRadius is in input units (cm in R3B default, mm in ATTPCROOT) and is
+    // scaled to mm via fInputUnit_mm. B field in T, theta in rad. Returns p in MeV/c.
+    const double R_in = track->GetGeoRadius();
+    if (!std::isfinite(R_in) || R_in <= 0)
     {
-        LOG(warn) << "R3BGTPCFitterUKF: GeoRadius not set or invalid (" << R_mm
+        LOG(warn) << "R3BGTPCFitterUKF: GeoRadius not set or invalid (" << R_in
                   << "), falling back to 100 MeV/c seed";
         return 100.0;
     }
+    const double R_mm = R_in * fInputUnit_mm;
 
     double theta = track->GetGeoTheta();
     if (!std::isfinite(theta))
@@ -94,10 +96,15 @@ std::unique_ptr<R3BGTPCFittedTrackData> R3BGTPCFitterUKF::FitTrack(R3BGTPCTrackD
         return nullptr;
     }
 
-    // -- 1. Seed momentum + initial pose from first two clusters
+    // -- 1. Seed momentum + initial pose from first two clusters. All
+    //       positions are scaled to mm via fInputUnit_mm so the UKF runs in
+    //       the same unit system as ATTPCROOT (where AtPropagator was
+    //       written and validated).
     const double p_seed = GetSeedMomentum(track);
     const auto& c0 = clusters->at(0);
-    ROOT::Math::XYZPoint initialPos(c0.GetX(), c0.GetY(), c0.GetZ());
+    ROOT::Math::XYZPoint initialPos(c0.GetX() * fInputUnit_mm,
+                                    c0.GetY() * fInputUnit_mm,
+                                    c0.GetZ() * fInputUnit_mm);
 
     ROOT::Math::XYZVector initialMom;
     const auto& c1 = clusters->at(1);
@@ -132,7 +139,9 @@ std::unique_ptr<R3BGTPCFittedTrackData> R3BGTPCFitterUKF::FitTrack(R3BGTPCTrackD
         for (size_t i = 1; i < clusters->size(); ++i)
         {
             const auto& ci = clusters->at(i);
-            ROOT::Math::XYZPoint meas(ci.GetX(), ci.GetY(), ci.GetZ());
+            ROOT::Math::XYZPoint meas(ci.GetX() * fInputUnit_mm,
+                                      ci.GetY() * fInputUnit_mm,
+                                      ci.GetZ() * fInputUnit_mm);
 
             fUKF->predictUKF(meas);
 
@@ -201,27 +210,33 @@ std::unique_ptr<R3BGTPCFittedTrackData> R3BGTPCFitterUKF::FitTrack(R3BGTPCTrackD
     const double phi_first = s0[5];
     const double KE_first = std::sqrt(p_first * p_first + fMass_MeV * fMass_MeV) - fMass_MeV;
 
-    fitted->SetVertex(ROOT::Math::XYZVector(vx, vy, vz));
+    // Vertex + smoothed positions are stored in the input unit system so
+    // they line up with the upstream R3BGTPCHitData / R3BGTPCTrackData.
+    const double outScale = 1.0 / fInputUnit_mm;
+    fitted->SetVertex(ROOT::Math::XYZVector(vx * outScale, vy * outScale, vz * outScale));
     fitted->SetKinematicsXtr(KE_first, theta_first, phi_first);
     fitted->SetKinematics(KE_first, theta_first, phi_first);
 
     std::vector<ROOT::Math::XYZPoint> smoothedPositions;
     smoothedPositions.reserve(smoothed.size());
     for (const auto& s : smoothed)
-        smoothedPositions.emplace_back(s[0], s[1], s[2]);
+        smoothedPositions.emplace_back(s[0] * outScale, s[1] * outScale, s[2] * outScale);
     fitted->SetSmoothedPositions(std::move(smoothedPositions));
 
-    // -- 6. chi^2 / ndf (rough: sum of (measurement - smoothed)^2 / sigma^2)
+    // -- 6. chi^2 / ndf (rough: sum of (measurement - smoothed)^2 / sigma^2).
+    //       Both terms are in the input unit system (mm cancellation done
+    //       implicitly via outScale on smoothed; cluster positions stay in
+    //       input units).
     double chi2 = 0;
     int ndf = 0;
-    const double sig2 = fMeasSigma_mm * fMeasSigma_mm;
+    const double sig_in = fMeasSigma_mm * outScale;
+    const double sig2 = sig_in * sig_in;
     for (size_t i = 0; i < clusters->size() && i < smoothed.size(); ++i)
     {
         const auto& ci = clusters->at(i);
-        const auto& si = smoothed[i];
-        const double dx = ci.GetX() - si[0];
-        const double dy = ci.GetY() - si[1];
-        const double dz = ci.GetZ() - si[2];
+        const double dx = ci.GetX() - smoothed[i][0] * outScale;
+        const double dy = ci.GetY() - smoothed[i][1] * outScale;
+        const double dz = ci.GetZ() - smoothed[i][2] * outScale;
         chi2 += (dx * dx + dy * dy + dz * dz) / sig2;
         ndf += 3;
     }

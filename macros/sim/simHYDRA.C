@@ -64,7 +64,10 @@ void simHYDRA(Int_t nEvents = 1000, TString GEOTAG = "Prototype", TString genera
     // To skip the detector comment out the line with: run->AddModule(...
 
     // GLAD
-    run->AddModule(new R3BGladMagnet("glad_s455_v2023.1.geo.root")); // GLAD should not be moved or rotated
+    // GLAD geometry — pick whatever is shipped in R3BRoot/geometry/. The
+    // upstream s455 v2023.1 file isn't included by default; v2025.1 works for
+    // the HYDRA-Prototype topology we care about.
+    run->AddModule(new R3BGladMagnet("glad_v2025.1.geo.root")); // GLAD should not be moved or rotated
 
     // --- GLAD-TPC detectors
     if (GEOTAG.CompareTo("Prototype") == 0)

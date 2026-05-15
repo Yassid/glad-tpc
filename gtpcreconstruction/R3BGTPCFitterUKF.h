@@ -50,6 +50,12 @@ class R3BGTPCFitterUKF
     void SetMinClusters(int n) { fMinClusters = n; }
     void SetEnableEnergyStraggling(bool enable) { fEnableEnStraggling = enable; }
     void SetELossScaleFactor(double f) { fELossScaleFactor = f; }
+
+    /// Length-unit conversion: multiply R3BGTPCTrackData positions by this
+    /// factor before feeding them to the UKF (and divide output positions by
+    /// it before storing). R3BRoot stores hits in cm (FairRoot convention)
+    /// so default = 10. ATTPCROOT users would pass 1.0.
+    void SetInputUnit_mm(double factor) { fInputUnit_mm = factor; }
     void SetUKFParameters(double alpha, double beta, double kappa)
     {
         fAlpha = alpha;
@@ -81,4 +87,5 @@ class R3BGTPCFitterUKF
     double fAlpha{ 1e-3 };
     double fBeta{ 2.0 };
     double fKappa{ 0.0 };
+    double fInputUnit_mm{ 10.0 }; ///< R3B default: input positions are cm → ×10 to mm
 };
