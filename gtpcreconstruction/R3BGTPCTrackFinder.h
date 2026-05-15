@@ -46,6 +46,13 @@ class R3BGTPCTrackFinder
     R3BGTPCTrackFinder();
     virtual ~R3BGTPCTrackFinder() = default;
     void Clusterize(R3BGTPCTrackData& track, Float_t distance, Float_t radius);
+
+    /// Kasa LSQ circle fit on the track's xy hit positions + LSQ refit of
+    /// z = a + b·phi on (phi, z) around the circle centre. Sets fGeoCenter,
+    /// fGeoRadius, fGeoTheta on the track. Required by R3BGTPCFitterUKF's
+    /// Brho seed and back-extrapolation.
+    void SetTrackInitialParameters(R3BGTPCTrackData& track);
+
     void eventToClusters(TClonesArray* hitCA, PointCloud& cloud);
     std::unique_ptr<R3BGTPCTrackData> clustersToTrack(PointCloud& cloud,
                                                       const std::vector<cluster_t>& clusters,

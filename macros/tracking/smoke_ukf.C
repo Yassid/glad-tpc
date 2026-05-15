@@ -43,9 +43,8 @@ void smoke_ukf()
     // ---- build synthetic R3BGTPCTrackData ----
     auto track = std::make_unique<R3BGTPCTrackData>();
     track->SetTrackId(0);
-    track->SetGeoCenter({ cx, cy });
-    track->SetGeoRadius(R_mm);
-    track->SetGeoTheta(theta_true);
+    // Geo fields will be populated below by SetTrackInitialParameters once
+    // the hits have been added — same path the real pipeline takes.
 
     // Sample clusters at uniform arc length, walking counter-clockwise from
     // (0, 0, 0) along the lower half of the circle.
@@ -76,9 +75,22 @@ void smoke_ukf()
 
         auto hcp = std::make_shared<R3BGTPCHitClusterData>(hc);
         track->AddClusterHit(hcp);
+
+        // Also push as raw hits, since SetTrackInitialParameters works on
+        // the hit array (representative of the production pipeline).
+        R3BGTPCHitData rawHit(x, y, 0.0, 0.0, 1.0);
+        track->AddHit(rawHit);
     }
 
     std::cout << "Track has " << track->GetHitClusterArray()->size() << " clusters.\n";
+
+    // Populate fGeoCenter / fGeoRadius / fGeoTheta from the hits, the way
+    // R3BGTPCTrackFinder::clustersToTrack does it in the real pipeline.
+    R3BGTPCTrackFinder finder;
+    finder.SetTrackInitialParameters(*track);
+    std::cout << "Kasa: center (" << track->GetGeoCenter().first << ", " << track->GetGeoCenter().second
+              << ")  R = " << track->GetGeoRadius() << " mm  theta = "
+              << track->GetGeoTheta() * 180. / M_PI << " deg\n";
 
     // ---- configure energy loss (hydrogen gas at HYDRA-like density) ----
     auto eloss = std::make_unique<AtTools::AtELossCATIMA>(3.553e-5);
@@ -88,7 +100,9 @@ void smoke_ukf()
     // ---- run the fitter ----
     R3BGTPCFitterUKF fitter(charge_C, mass_proton_MeV, std::move(eloss));
     fitter.SetBField({ 0., 0., B_T });
-    fitter.SetMomentumSeed(p_true_MeV); // bypass Brho seed; we want the fit, not the seed
+    // No SetMomentumSeed: Brho is derived from the geo fields populated
+    // by SetTrackInitialParameters above. This is the end-to-end flow that
+    // the production FairTask wrapper will use.
     fitter.SetMeasurementSigma(sigma_xy_mm);
     fitter.SetMinClusters(5);
 
