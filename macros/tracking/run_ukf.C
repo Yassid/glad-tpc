@@ -13,6 +13,14 @@
 void run_ukf(TString fileName = "output_tracking.root", TString outName = "output_ukf.root")
 {
     TString workDir = gSystem->Getenv("VMCWORKDIR");
+    const char* suffix_env = gSystem->Getenv("SUFFIX");
+    TString suffix = suffix_env ? suffix_env : "";
+    // If caller passed the default filenames AND a SUFFIX is set, apply it
+    // to keep file naming consistent across the chain.
+    if (suffix.Length() > 0 && fileName == "output_tracking.root")
+        fileName = "output_tracking" + suffix + ".root";
+    if (suffix.Length() > 0 && outName == "output_ukf.root")
+        outName = "output_ukf" + suffix + ".root";
     TString inFile = workDir + "/glad-tpc/macros/tracking/" + fileName;
     TString outFile = workDir + "/glad-tpc/macros/tracking/" + outName;
 
@@ -27,6 +35,15 @@ void run_ukf(TString fileName = "output_tracking.root", TString outName = "outpu
     fitTask->SetBField({ 0., 0., 2.0 });  // T
     fitTask->SetMeasurementSigma(1.0);
     fitTask->SetMomentumSigmaFrac(0.1);
+    // Seed override: SEED_P_MEV env var sets a fixed initial momentum
+    // (overrides Brho from PRA). Useful for diagnosing whether σ_p/p
+    // is seed-limited vs measurement-limited in small chambers.
+    const char* seed_env = gSystem->Getenv("SEED_P_MEV");
+    if (seed_env && std::atof(seed_env) > 0) {
+        const double p_seed = std::atof(seed_env);
+        fitTask->SetMomentumSeed(p_seed);
+        std::cout << "[run_ukf] Using seed override p = " << p_seed << " MeV/c\n";
+    }
     fitTask->SetMinClusters(5);
     fitTask->SetEnableEnergyStraggling(true);
 

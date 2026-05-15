@@ -20,8 +20,13 @@ void simHYDRA(Int_t nEvents = 1000, TString GEOTAG = "Prototype", TString genera
     TString transport = "TGeant4";
     cout << "The generator used is:\033[1;32m" << generator << endl;
     TString inputFile;
-    TString outFile = "./" + GEOTAG + "/sim.root";
-    TString parFile = "./" + GEOTAG + "/par.root";
+    // Per-momentum output naming: scan_p.sh exports SUFFIX=_pXXX so files
+    // for different momenta don't collide in ./Prototype/. Default empty
+    // keeps the original behaviour.
+    const char* suffix_env = gSystem->Getenv("SUFFIX");
+    TString suffix = suffix_env ? suffix_env : "";
+    TString outFile = "./" + GEOTAG + "/sim" + suffix + ".root";
+    TString parFile = "./" + GEOTAG + "/par" + suffix + ".root";
 
     cout << "\033[1;31m Warning\033[0m: The detector is: " << GEOTAG << endl;
 
@@ -115,15 +120,29 @@ void simHYDRA(Int_t nEvents = 1000, TString GEOTAG = "Prototype", TString genera
     if (generator.CompareTo("box") == 0)
     {
         Int_t pdgId = -211;    // pi-
-        Double32_t theta1 = 0; // polar angle distribution
-        Double32_t theta2 = 1.;
-        Double32_t momentum = 0.8; //[GeV]
+        // Momentum override via env. Default keeps the historical 0.8 GeV/c.
+        const char* p_env = gSystem->Getenv("P_MEV");
+        Double32_t momentum = p_env ? std::atof(p_env) * 1.0e-3 : 0.8; // [GeV/c]
+
+        // Aim the pion at the Prototype chamber centre. Target at
+        // (-2.7, 0, 237) cm, chamber centre at (8.6, 0, 271) cm. Direction
+        // from target → chamber: (11.3, 0, 34) → theta = atan(11.3/34) ≈
+        // 18.4° from +z, phi = 0° (toward +x). A 3° half-width around that
+        // gives a small acceptance cone while keeping pions inside the
+        // active volume across the scan range.
+        Double32_t theta_aim_deg = std::atan2(11.3, 34.0) * TMath::RadToDeg();
+        Double32_t theta_half_deg = 3.0;
+        Double32_t phi_half_deg = 3.0;
         FairBoxGenerator* boxGen = new FairBoxGenerator(pdgId, 1);
-        boxGen->SetThetaRange(theta1, theta2);
-        boxGen->SetPRange(momentum, momentum * 1.0);
-        boxGen->SetPhiRange(0, 360);
-        boxGen->SetXYZ(-2.7, 0.0, 237); // target position+10cm decay length
+        boxGen->SetThetaRange(theta_aim_deg - theta_half_deg, theta_aim_deg + theta_half_deg);
+        boxGen->SetPRange(momentum, momentum);
+        boxGen->SetPhiRange(-phi_half_deg, phi_half_deg);
+        boxGen->SetXYZ(-2.7, 0.0, 237); // target plane upstream of chamber
         primGen->AddGenerator(boxGen);
+        cout << "[box generator] p = " << momentum * 1000 << " MeV/c, "
+             << "theta in [" << theta_aim_deg - theta_half_deg << ", "
+             << theta_aim_deg + theta_half_deg << "] deg, phi in ±"
+             << phi_half_deg << " deg\n";
     }
 
     if (generator.CompareTo("bkg_evt") == 0 || generator.CompareTo("good_evt") == 0)

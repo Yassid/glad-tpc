@@ -14,8 +14,10 @@ void run_tracking(TString fileName = "output_reco.root")
     TString GTPCTrackParamsFile;
     TString workDir = gSystem->Getenv("VMCWORKDIR");
 
+    const char* suffix_env = gSystem->Getenv("SUFFIX");
+    TString suffix = suffix_env ? suffix_env : "";
     inFile = workDir + "/glad-tpc/macros/reco/" + fileName;
-    outFile = workDir + "/glad-tpc/macros/tracking/output_tracking.root";
+    outFile = workDir + "/glad-tpc/macros/tracking/output_tracking" + suffix + ".root";
     GTPCTrackParamsFile = workDir + "/glad-tpc/params/Hit_FileSetup.par";
 
     // -----   Create analysis run   ----------------------------------------

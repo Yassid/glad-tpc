@@ -16,10 +16,12 @@ void run_reconstruction(TString fileName = "lang.root")
     TString workDir = gSystem->Getenv("VMCWORKDIR");
 
     cout << "\033[1;31m Warning\033[0m: The detector is: Prototype" << endl;
+    const char* suffix_env = gSystem->Getenv("SUFFIX");
+    TString suffix = suffix_env ? suffix_env : "";
     inFile = workDir + "/glad-tpc/macros/proj/Prototype/" + fileName;
-    outFile = workDir + "/glad-tpc/macros/reco/output_reco.root";
+    outFile = workDir + "/glad-tpc/macros/reco/output_reco" + suffix + ".root";
     // GTPCHitParamsFile = workDir + "/glad-tpc/params/Hit_FileSetup.par";
-    parFile = "../sim/Prototype/par.root";
+    parFile = TString("../sim/Prototype/par") + suffix + ".root";
     GTPCGeoParamsFile = workDir + "/glad-tpc/params/HYDRAprototype_FileSetup_v2_02082022.par";
 
     // -----   Create analysis run   ----------------------------------------

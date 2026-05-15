@@ -14,9 +14,11 @@ void run_lang(TString GEOTAG = "Prototype")
     TString GTPCGeoParamsFile;
     TString geoPath = gSystem->Getenv("VMCWORKDIR");
     cout << "\033[1;31m Warning\033[0m: The detector is: " << GEOTAG << endl;
-    inFile = "../sim/" + GEOTAG + "/sim.root";
-    parFile = "../sim/" + GEOTAG + "/par.root";
-    outFile = "./" + GEOTAG + "/lang.root";
+    const char* suffix_env = gSystem->Getenv("SUFFIX");
+    TString suffix = suffix_env ? suffix_env : "";
+    inFile = "../sim/" + GEOTAG + "/sim" + suffix + ".root";
+    parFile = "../sim/" + GEOTAG + "/par" + suffix + ".root";
+    outFile = "./" + GEOTAG + "/lang" + suffix + ".root";
     GTPCGeoParamsFile =
         geoPath + "/glad-tpc/params/HYDRAprototype_FileSetup_v2_02082022.par"; // New .par including the x and z offsets
     GTPCGeoParamsFile.ReplaceAll("//", "/");
