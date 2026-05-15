@@ -49,6 +49,12 @@ void R3BGTPCTrack2Fit::SetParContainers()
     fFitter->SetMinClusters(fMinClusters);
     fFitter->SetEnableEnergyStraggling(fEnableEnStraggling);
     fFitter->SetELossScaleFactor(fELossScaleFactor);
+    fFitter->SetInputUnit_mm(fInputUnit_mm);
+    fFitter->SetUseHelixBackExtrap(fUseHelixBackExtrap);
+    fFitter->SetForceVertexOnBeamAxis(fForceVertexOnBeamAxis);
+    fFitter->SetUpdateAnglesOnBackExtrap(fUpdateAnglesOnBackExtrap);
+    fFitter->SetBackExtrapMaxPath(fBackExtrapMaxPath);
+    fFitter->SetBackExtrapTargetX(fBackExtrapTargetX);
 }
 
 InitStatus R3BGTPCTrack2Fit::Init()

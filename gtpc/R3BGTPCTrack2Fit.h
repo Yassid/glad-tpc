@@ -11,6 +11,7 @@
 #include "FairTask.h"
 
 #include <Math/Vector3D.h>
+#include <limits>
 #include <memory>
 
 class R3BGTPCFitterUKF;
@@ -67,6 +68,12 @@ class R3BGTPCTrack2Fit : public FairTask
     void SetMinClusters(int n) { fMinClusters = n; }
     void SetEnableEnergyStraggling(bool on) { fEnableEnStraggling = on; }
     void SetELossScaleFactor(double f) { fELossScaleFactor = f; }
+    void SetInputUnit_mm(double f) { fInputUnit_mm = f; }
+    void SetUseHelixBackExtrap(bool on) { fUseHelixBackExtrap = on; }
+    void SetBackExtrapMaxPath(double mm) { fBackExtrapMaxPath = mm; }
+    void SetForceVertexOnBeamAxis(bool on) { fForceVertexOnBeamAxis = on; }
+    void SetUpdateAnglesOnBackExtrap(bool on) { fUpdateAnglesOnBackExtrap = on; }
+    void SetBackExtrapTargetX(double x_in) { fBackExtrapTargetX = x_in; }
     void SetOnline(bool on) { fOnline = on; }
 
     void SetInputBranch(const char* name) { fInputBranch = name; }
@@ -92,6 +99,12 @@ class R3BGTPCTrack2Fit : public FairTask
     int fMinClusters{ 5 };
     bool fEnableEnStraggling{ true };
     double fELossScaleFactor{ 1.0 };
+    double fInputUnit_mm{ 10.0 };
+    bool fUseHelixBackExtrap{ true };
+    bool fForceVertexOnBeamAxis{ false };
+    bool fUpdateAnglesOnBackExtrap{ true };
+    double fBackExtrapMaxPath{ 450.0 };
+    double fBackExtrapTargetX{ std::numeric_limits<double>::quiet_NaN() };
 
     bool fOnline{ false };
     TString fInputBranch{ "GTPCTrackData" };

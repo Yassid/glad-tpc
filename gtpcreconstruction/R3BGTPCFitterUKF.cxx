@@ -194,28 +194,171 @@ std::unique_ptr<R3BGTPCFittedTrackData> R3BGTPCFitterUKF::FitTrack(R3BGTPCTrackD
     if (!converged)
         return fitted;
 
-    // -- 5. Extract kinematics from the smoothed state at first cluster.
-    //       Back-extrapolation to the production vertex is a TODO; for now
-    //       fKinematics == fKinematicsXtr (both at first cluster).
+    // -- 5. Extract kinematics from the smoothed state at first cluster +
+    //       back-extrapolate to the production vertex along the PRA helix.
+    //       Two outputs:
+    //         KinematicsXtr — at the first cluster (pre-back-extrap, purely
+    //                         measurement-driven; useful sanity check).
+    //         Kinematics    — at the back-extrapolated vertex (canonical:
+    //                         this is what physics analyses read).
     const auto& smoothed = fUKF->GetSmoothedStates();
     if (smoothed.empty())
         return fitted;
 
     const auto& s0 = smoothed.front();
-    const double vx = s0[0];
-    const double vy = s0[1];
-    const double vz = s0[2];
-    const double p_first = s0[3];
-    const double theta_first = s0[4];
-    const double phi_first = s0[5];
-    const double KE_first = std::sqrt(p_first * p_first + fMass_MeV * fMass_MeV) - fMass_MeV;
+    double vx = s0[0]; // mm
+    double vy = s0[1];
+    double vz = s0[2];
+    double p_s = s0[3];
+    double theta_s = s0[4];
+    double phi_s = s0[5];
+    const double KE_first = std::sqrt(p_s * p_s + fMass_MeV * fMass_MeV) - fMass_MeV;
+    fitted->SetKinematicsXtr(KE_first, theta_s, phi_s);
+
+    // --- Back-extrapolation to beam axis along the PRA helix ---
+    // Ported from AtFitterUKF (commit cbc97ade); see there for the
+    // derivation of the POCA-on-circle closed form and the chord append for
+    // ForceVertexOnBeamAxis. Distances are mm; input frame conversion is
+    // done at the boundary via fInputUnit_mm.
+    if (p_s > 0 && fBackExtrapMaxPath > 0.)
+    {
+        double pathLength = 0.;
+
+        // PRA circle parameters from the upstream Kasa fit, scaled to mm.
+        const auto geoCenter = track->GetGeoCenter();
+        const double cx = geoCenter.first * fInputUnit_mm;
+        const double cy = geoCenter.second * fInputUnit_mm;
+        const double R = track->GetGeoRadius() * fInputUnit_mm;
+        const double dCenter = std::sqrt(cx * cx + cy * cy);
+        const bool circleValid = fUseHelixBackExtrap && std::isfinite(R) && (R > 1.0) && (dCenter > 1.0);
+
+        if (circleValid)
+        {
+            // POCA of the PRA circle to (0, 0). The closer of the two
+            // extrema is (cx, cy) · (1 − R / d) for any d > 0.
+            const double f = 1.0 - R / dCenter;
+            const double pocaX = cx * f;
+            const double pocaY = cy * f;
+
+            // Use the raw hit closest to the beam axis as the back-extrap
+            // start (instead of the cluster-centroid smoothed state), which
+            // removes the half-cluster-spacing · cot(θ) z-bias on upward
+            // tracks.
+            double rxFirst = vx;
+            double ryFirst = vy;
+            double rzFirst = vz;
+            {
+                const auto& hits = track->GetHitArray();
+                double bestR2 = rxFirst * rxFirst + ryFirst * ryFirst;
+                for (const auto& h : hits)
+                {
+                    const double hx = h.GetX() * fInputUnit_mm;
+                    const double hy = h.GetY() * fInputUnit_mm;
+                    const double hz = h.GetZ() * fInputUnit_mm;
+                    const double r2 = hx * hx + hy * hy;
+                    if (r2 < bestR2)
+                    {
+                        bestR2 = r2;
+                        rxFirst = hx;
+                        ryFirst = hy;
+                        rzFirst = hz;
+                    }
+                }
+            }
+
+            // Arc length along the PRA circle from raw first hit to POCA;
+            // pick the shorter wrap.
+            const double phi1 = std::atan2(ryFirst - cy, rxFirst - cx);
+            const double phi0 = std::atan2(pocaY - cy, pocaX - cx);
+            double dPhi = std::abs(phi1 - phi0);
+            if (dPhi > kPi)
+                dPhi = 2 * kPi - dPhi;
+            double arc = R * dPhi;
+
+            double endX = pocaX;
+            double endY = pocaY;
+            if (fForceVertexOnBeamAxis)
+            {
+                arc += std::sqrt(pocaX * pocaX + pocaY * pocaY);
+                endX = 0.0;
+                endY = 0.0;
+            }
+            arc = std::min(arc, fBackExtrapMaxPath);
+
+            const double sinTheta = std::max(std::sin(theta_s), 0.1);
+            const double cotTheta = std::cos(theta_s) / sinTheta;
+
+            vx = endX;
+            vy = endY;
+            vz = rzFirst - arc * cotTheta;
+            pathLength = arc;
+
+            if (fUpdateAnglesOnBackExtrap)
+            {
+                const double dphi_mag = arc / R;
+                const double signFactor = (fCharge < 0) ? -1.0 : +1.0;
+                phi_s += signFactor * dphi_mag;
+                while (phi_s > kPi)
+                    phi_s -= 2 * kPi;
+                while (phi_s <= -kPi)
+                    phi_s += 2 * kPi;
+            }
+        }
+        else
+        {
+            // Linear fallback (used when the PRA circle is degenerate).
+            const double rXY = std::sqrt(vx * vx + vy * vy);
+            const double sinTheta = std::sin(theta_s);
+            pathLength = (sinTheta > 0.1) ? rXY / sinTheta : rXY;
+            pathLength = std::min(pathLength, fBackExtrapMaxPath);
+            ROOT::Math::Polar3DVector momDir(1.0, theta_s, phi_s);
+            ROOT::Math::XYZVector dir(momDir);
+            vx -= dir.X() * pathLength;
+            vy -= dir.Y() * pathLength;
+            vz -= dir.Z() * pathLength;
+        }
+
+        // Optional straight-line tail from POCA to fBackExtrapTargetX (in
+        // input units). For wide-field setups where the production vertex
+        // sits inside the field region, leave fBackExtrapTargetX at NaN.
+        if (!std::isnan(fBackExtrapTargetX))
+        {
+            const double targetX_mm = fBackExtrapTargetX * fInputUnit_mm;
+            if (vx > targetX_mm)
+            {
+                ROOT::Math::Polar3DVector momDir(1.0, theta_s, phi_s);
+                ROOT::Math::XYZVector dir(momDir);
+                if (std::abs(dir.X()) > 0.01)
+                {
+                    const double tailPath = (vx - targetX_mm) / dir.X();
+                    vx -= dir.X() * tailPath;
+                    vy -= dir.Y() * tailPath;
+                    vz -= dir.Z() * tailPath;
+                }
+            }
+        }
+
+        // Energy correction along the back-extrapolated path (signed: we
+        // add eLost since we're going *backward* in time, so the particle
+        // had MORE energy at the vertex).
+        double KE_at_cluster = std::sqrt(p_s * p_s + fMass_MeV * fMass_MeV) - fMass_MeV;
+        if (auto* elossModel = fUKF->GetPropagator().GetELossModel())
+        {
+            const double dEdx = elossModel->GetdEdx(KE_at_cluster);
+            const double eLost = dEdx * pathLength;
+            const double KE_at_vertex = KE_at_cluster + eLost;
+            if (KE_at_vertex > 0)
+                p_s = std::sqrt(KE_at_vertex * KE_at_vertex + 2 * KE_at_vertex * fMass_MeV);
+        }
+    }
+
+    const double KE_vtx = std::sqrt(p_s * p_s + fMass_MeV * fMass_MeV) - fMass_MeV;
 
     // Vertex + smoothed positions are stored in the input unit system so
     // they line up with the upstream R3BGTPCHitData / R3BGTPCTrackData.
     const double outScale = 1.0 / fInputUnit_mm;
     fitted->SetVertex(ROOT::Math::XYZVector(vx * outScale, vy * outScale, vz * outScale));
-    fitted->SetKinematicsXtr(KE_first, theta_first, phi_first);
-    fitted->SetKinematics(KE_first, theta_first, phi_first);
+    fitted->SetKinematics(KE_vtx, theta_s, phi_s);
 
     std::vector<ROOT::Math::XYZPoint> smoothedPositions;
     smoothedPositions.reserve(smoothed.size());

@@ -105,6 +105,9 @@ void smoke_ukf()
     // the production FairTask wrapper will use.
     fitter.SetMeasurementSigma(sigma_xy_mm);
     fitter.SetMinClusters(5);
+    // Smoke test generates positions directly in mm — override the R3B
+    // default (cm → mm conversion factor = 10).
+    fitter.SetInputUnit_mm(1.0);
 
     auto fitted = fitter.FitTrack(track.get());
 
