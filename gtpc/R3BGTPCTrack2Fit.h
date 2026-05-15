@@ -92,7 +92,7 @@ class R3BGTPCTrack2Fit : public FairTask
     std::vector<std::tuple<int, int, int>> fGasComponents{ std::make_tuple(1, 1, 1) };
 
     // fitter knobs
-    ROOT::Math::XYZVector fBField{ 0., 0., 2.0 };
+    ROOT::Math::XYZVector fBField{ 0., 2.0, 0. }; // R3B GLAD dipole: B along +ŷ, 2 T
     double fMomentumSeed{ -1.0 };
     double fMeasSigma_mm{ 1.0 };
     double fMomSigmaFrac{ 0.1 };

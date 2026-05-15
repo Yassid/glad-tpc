@@ -265,11 +265,15 @@ void R3BGTPCTrackFinder::Clusterize(R3BGTPCTrackData& track, Float_t distance, F
 
 void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
 {
-    // Kasa LSQ circle fit on the (x, y) hit positions: solves
-    //     min_{A, B, C}  Σ (x² + y² + A x + B y + C)²
-    // with center (-A/2, -B/2) and radius² = (A² + B²)/4 − C. Direct 3×3
-    // Cramer's-rule solve on the normal equations. Returns NaN geo fields
-    // if the system is rank-deficient (e.g. all hits collinear).
+    // Kasa LSQ circle fit in the bending plane (perpendicular to B). R3B
+    // GLAD has B = (0, B_y, 0) so the bending plane is (x, z); we fit
+    //     min_{A, B, C}  Σ (x² + z² + A x + B z + C)²
+    // with centre (-A/2, -B/2) and radius² = (A² + B²)/4 − C. (If the field
+    // direction ever changes, swap the two coordinates fed into the Kasa
+    // accumulators accordingly.)
+    //
+    // GeoCenter stores (u, w) where u/w are the in-plane coordinates — here
+    // (cx, cz). GeoTheta stores the angle from the field direction (+y).
     const auto& hits = track.GetHitArray();
     const std::size_t n = hits.size();
     if (n < 3)
@@ -279,7 +283,7 @@ void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
     for (const auto& h : hits)
     {
         const double x = h.GetX();
-        const double y = h.GetY();
+        const double y = h.GetZ(); // bending-plane second axis = z (B = +ŷ)
         const double r2 = x * x + y * y;
         sx += x;
         sy += y;
@@ -301,34 +305,32 @@ void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
     const double B = dB / det;
     const double C = dC / det;
     const double cx = A / 2.0;
-    const double cy = B / 2.0;
-    const double r2 = C + cx * cx + cy * cy;
+    const double cz = B / 2.0;
+    const double r2 = C + cx * cx + cz * cz;
     if (!(r2 > 0))
         return;
-    const double R_mm = std::sqrt(r2);
-    track.SetGeoCenter({ cx, cy });
-    track.SetGeoRadius(R_mm);
+    const double R = std::sqrt(r2);
+    track.SetGeoCenter({ cx, cz });
+    track.SetGeoRadius(R);
 
-    // LSQ refit of z = a + b·phi on (phi, z), with phi computed around the
-    // fitted circle centre. The polar angle θ satisfies cot(θ) = sign(ψ̇)·b/R,
-    // where sign(ψ̇) is the rotation direction along the track (CCW: +1,
-    // CW: −1). Without this sign factor the result collapses to its
-    // supplementary angle, breaking back-extrap z reconstruction even though
-    // the Brho seed (sin(θ)) is symmetric.
+    // LSQ refit of y = a + b·phi on (phi, y), with phi computed around the
+    // fitted circle centre in (x,z). The angle from the B direction satisfies
+    //     cot(θ_y) = sign(ψ̇)·b/R,
+    // where sign(ψ̇) is the rotation direction along the track in (x,z).
     if (n < 2)
     {
         track.SetGeoTheta(TMath::Pi() / 2.0);
         return;
     }
-    double sphi = 0., sz = 0., sphi2 = 0., sphiz = 0.;
+    double sphi = 0., sy_p = 0., sphi2 = 0., sphiy = 0.;
     for (const auto& h : hits)
     {
-        const double phi = std::atan2(h.GetY() - cy, h.GetX() - cx);
-        const double z = h.GetZ();
+        const double phi = std::atan2(h.GetZ() - cz, h.GetX() - cx);
+        const double y = h.GetY();
         sphi += phi;
-        sz += z;
+        sy_p += y;
         sphi2 += phi * phi;
-        sphiz += phi * z;
+        sphiy += phi * y;
     }
     const double detPhi = nd * sphi2 - sphi * sphi;
     if (std::abs(detPhi) < 1e-9)
@@ -336,13 +338,13 @@ void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
         track.SetGeoTheta(TMath::Pi() / 2.0);
         return;
     }
-    const double b = (nd * sphiz - sphi * sz) / detPhi;
+    const double b = (nd * sphiy - sphi * sy_p) / detPhi;
 
-    // Resolve rotation sign from the φ-walk between first and last hit
-    // (assuming the pattern-recognition step returns hits in track order).
-    // Unwrap dφ to (-π, π] so a single half-turn track keeps its direction.
-    const double phi_first = std::atan2(hits.front().GetY() - cy, hits.front().GetX() - cx);
-    const double phi_last = std::atan2(hits.back().GetY() - cy, hits.back().GetX() - cx);
+    // Resolve rotation sign from the φ-walk in (x,z) between first and last
+    // hit (pattern recognition returns hits in track order). Unwrap dφ to
+    // (-π, π] so a single half-turn track keeps its direction.
+    const double phi_first = std::atan2(hits.front().GetZ() - cz, hits.front().GetX() - cx);
+    const double phi_last = std::atan2(hits.back().GetZ() - cz, hits.back().GetX() - cx);
     double dphi = phi_last - phi_first;
     while (dphi > TMath::Pi())
         dphi -= 2.0 * TMath::Pi();
@@ -350,6 +352,6 @@ void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
         dphi += 2.0 * TMath::Pi();
     const double sign_psi_dot = (dphi >= 0) ? 1.0 : -1.0;
 
-    const double cot_th = b * sign_psi_dot / R_mm;
+    const double cot_th = b * sign_psi_dot / R;
     track.SetGeoTheta(std::atan2(1.0, cot_th));
 }

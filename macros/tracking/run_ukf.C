@@ -32,7 +32,7 @@ void run_ukf(TString fileName = "output_tracking.root", TString outName = "outpu
     // pion default — match the HYDRA scan in ATTPCROOT
     fitTask->SetParticle(1.602176634e-19, 139.57039);
     fitTask->SetProjectile(1, 1, 0.1395); // π± in u
-    fitTask->SetBField({ 0., 0., 2.0 });  // T
+    fitTask->SetBField({ 0., 2.0, 0. });  // T — R3B GLAD: horizontal dipole along +y
     fitTask->SetMeasurementSigma(1.0);
     fitTask->SetMomentumSigmaFrac(0.1);
     // Seed override: SEED_P_MEV env var sets a fixed initial momentum

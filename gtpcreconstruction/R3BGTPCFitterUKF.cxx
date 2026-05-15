@@ -77,8 +77,12 @@ double R3BGTPCFitterUKF::GetSeedMomentum(R3BGTPCTrackData* track) const
     if (std::abs(sinTheta) < 0.1)
         sinTheta = (sinTheta < 0 ? -0.1 : 0.1);
 
-    const double Brho = std::abs(fBField.Z() * R_mm / 1000.0 / sinTheta); // T·m
-    return Brho * 0.3 * 1000.0;                                           // → MeV/c
+    // R3B GLAD: B = (0, B_y, 0). The Kasa fit in R3BGTPCTrackFinder gives
+    // GeoRadius in the bending plane (x,z); GeoTheta is the angle from the
+    // field direction (+y). Brho uses |B| (magnitude) for generality.
+    const double Bmag = std::sqrt(fBField.X() * fBField.X() + fBField.Y() * fBField.Y() + fBField.Z() * fBField.Z());
+    const double Brho = std::abs(Bmag * R_mm / 1000.0 / sinTheta); // T·m
+    return Brho * 0.3 * 1000.0;                                    // → MeV/c
 }
 
 std::unique_ptr<R3BGTPCFittedTrackData> R3BGTPCFitterUKF::FitTrack(R3BGTPCTrackData* track)

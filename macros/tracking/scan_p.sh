@@ -46,11 +46,10 @@ mkdir -p "$VMCWORKDIR/glad-tpc/macros/proj/Prototype"
 for P in $PLIST; do
    export P_MEV=$P
    export SUFFIX=_p${P}
-   # Truth-seed the UKF (overrides Brho/Kasa). The Prototype chamber is too
-   # short for the Kasa fit at high p (sagitta < hit noise); using truth seed
-   # isolates the intrinsic UKF resolution.
-   export SEED_P_MEV=$P
-   echo "===== p=$P MeV/c (seed=$SEED_P_MEV) ====="
+   # Use the Kasa-derived seed (no truth override). With B = ŷ the bending
+   # plane is (x, z) and the Kasa fit can now extract a meaningful radius.
+   unset SEED_P_MEV
+   echo "===== p=$P MeV/c ====="
 
    pushd "$VMCWORKDIR/glad-tpc/macros/sim" >/dev/null
    root -b -q -e ".L simHYDRA.C" -e "simHYDRA($NEVT, \"Prototype\", \"box\")" \
