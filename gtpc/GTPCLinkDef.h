@@ -38,6 +38,7 @@
 #pragma link C++ class R3BGTPCMapped2Cal+;
 
 #pragma link C++ class R3BGTPCHit2Track+;
+#pragma link C++ class R3BGTPCTrack2Fit+;
 
 //#pragma link C++ class R3BGTPCCal2HitPar+;
 //#pragma link C++ class R3BGTPCMapped2CalPar+;
