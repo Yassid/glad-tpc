@@ -265,59 +265,80 @@ void R3BGTPCTrackFinder::Clusterize(R3BGTPCTrackData& track, Float_t distance, F
 
 void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
 {
-    // Kasa LSQ circle fit in the bending plane (perpendicular to B). R3B
-    // GLAD has B = (0, B_y, 0) so the bending plane is (x, z); we fit
-    //     min_{A, B, C}  Σ (x² + z² + A x + B z + C)²
-    // with centre (-A/2, -B/2) and radius² = (A² + B²)/4 − C. (If the field
-    // direction ever changes, swap the two coordinates fed into the Kasa
-    // accumulators accordingly.)
+    // Circle fit in the bending plane (perpendicular to B). R3B GLAD has
+    // B = (0, B_y, 0) so the bending plane is (x, z). We use Pratt's
+    // method (N. Chernov, "Circular and Linear Regression", Ch. 5) which
+    // is a closed-form algebraic fit unbiased to leading order in the
+    // hit noise — substantially better than naive Kasa, which biases R
+    // low when sagitta is comparable to noise. A short Gauss-Newton
+    // refinement on the perpendicular residual then gives the geometric
+    // optimum.
     //
-    // GeoCenter stores (u, w) where u/w are the in-plane coordinates — here
-    // (cx, cz). GeoTheta stores the angle from the field direction (+y).
+    // GeoCenter stores (cx, cz); GeoTheta stores the angle from +ŷ.
     const auto& hits = track.GetHitArray();
     const std::size_t n = hits.size();
     if (n < 3)
         return;
 
-    double sx = 0., sy = 0., sxx = 0., syy = 0., sxy = 0., sxr = 0., syr = 0., sr = 0.;
+    // Pratt fit (centred data, Newton on the characteristic cubic).
+    double xb = 0, zb = 0;
+    for (const auto& h : hits) { xb += h.GetX(); zb += h.GetZ(); }
+    xb /= n;
+    zb /= n;
+    double Mxx = 0, Myy = 0, Mxy = 0, Mxz = 0, Myz = 0, Mzz = 0;
     for (const auto& h : hits)
     {
-        const double x = h.GetX();
-        const double y = h.GetZ(); // bending-plane second axis = z (B = +ŷ)
-        const double r2 = x * x + y * y;
-        sx += x;
-        sy += y;
-        sxx += x * x;
-        syy += y * y;
-        sxy += x * y;
-        sxr += x * r2;
-        syr += y * r2;
-        sr += r2;
+        const double dx = h.GetX() - xb;
+        const double dy = h.GetZ() - zb;
+        const double z = dx * dx + dy * dy;
+        Mxx += dx * dx;
+        Myy += dy * dy;
+        Mxy += dx * dy;
+        Mxz += dx * z;
+        Myz += dy * z;
+        Mzz += z * z;
     }
     const double nd = static_cast<double>(n);
-    const double det = sxx * (syy * nd - sy * sy) - sxy * (sxy * nd - sy * sx) + sx * (sxy * sy - syy * sx);
-    if (std::abs(det) < 1e-9)
-        return;
-    const double dA = sxr * (syy * nd - sy * sy) - sxy * (syr * nd - sy * sr) + sx * (syr * sy - syy * sr);
-    const double dB = sxx * (syr * nd - sy * sr) - sxr * (sxy * nd - sy * sx) + sx * (sxy * sr - syr * sx);
-    const double dC = sxx * (syy * sr - syr * sy) - sxy * (sxy * sr - syr * sx) + sxr * (sxy * sy - syy * sx);
-    const double A = dA / det;
-    const double B = dB / det;
-    const double C = dC / det;
-    double cx = A / 2.0;
-    double cz = B / 2.0;
-    const double r2_kasa = C + cx * cx + cz * cz;
-    if (!(r2_kasa > 0))
-        return;
-    double R = std::sqrt(r2_kasa);
+    Mxx /= nd; Myy /= nd; Mxy /= nd; Mxz /= nd; Myz /= nd; Mzz /= nd;
+    const double Mz = Mxx + Myy;
+    const double Cov_xy = Mxx * Myy - Mxy * Mxy;
+    const double Mxz2 = Mxz * Mxz;
+    const double Myz2 = Myz * Myz;
+    // Cubic A3·t³ + A2·t² + A1·t + A0 = 0 (Pratt's characteristic equation)
+    const double A3 = 4.0 * Mz;
+    const double A2 = -3.0 * Mz * Mz - Mzz;
+    const double A1 = Mzz * Mz + 4.0 * Cov_xy * Mz - Mxz2 - Myz2 - Mz * Mz * Mz;
+    const double A0 = Mxz2 * Myy + Myz2 * Mxx - Mzz * Cov_xy - 2.0 * Mxz * Myz * Mxy + Mz * Mz * Cov_xy;
+    const double A22 = A2 + A2;
+    const double A33 = A3 + A3 + A3;
+    // Newton's method on the cubic, starting at t=0 (smallest root)
+    double tnew = 0, ynew = 1e20;
+    for (int iter = 0; iter < 100; ++iter)
+    {
+        const double yold = ynew;
+        ynew = A0 + tnew * (A1 + tnew * (A2 + tnew * A3));
+        if (std::abs(ynew) > std::abs(yold)) break;
+        const double Dy = A1 + tnew * (A22 + tnew * A33);
+        if (std::abs(Dy) < 1e-30) break;
+        const double told = tnew;
+        tnew = told - ynew / Dy;
+        if (std::abs(tnew - told) < 1e-12 * std::abs(tnew == 0 ? 1.0 : tnew)) break;
+        if (tnew < 0) { tnew = 0; break; }
+    }
+    const double DET = tnew * tnew - tnew * Mz + Cov_xy;
+    if (std::abs(DET) < 1e-30) return;
+    const double Xcenter = (Mxz * (Myy - tnew) - Myz * Mxy) / (DET * 2.0);
+    const double Ycenter = (Myz * (Mxx - tnew) - Mxz * Mxy) / (DET * 2.0);
+    double cx = Xcenter + xb;
+    double cz = Ycenter + zb;
+    const double R2_pratt = Xcenter * Xcenter + Ycenter * Ycenter + Mz + 2.0 * tnew;
+    if (!(R2_pratt > 0)) return;
+    double R = std::sqrt(R2_pratt);
 
-    // Refine to a geometric (perpendicular least-squares) circle using
-    // Gauss-Newton on the Kasa seed. The algebraic Kasa fit is well known to
-    // bias R low when the data has noise of order the sagitta — for a 1 mm
-    // hit RMS over a 20 cm chord at R ~ 100 cm, the bias is ~40 %. The
-    // geometric fit removes this. Converges in <10 iterations for sensible
-    // seeds.
-    for (int iter = 0; iter < 30; ++iter)
+    // Geometric refinement (Gauss-Newton on Σ(d − R)²) from the Pratt seed.
+    // Pratt is already unbiased to leading order; this nails the geometric
+    // optimum in 2-5 iterations.
+    for (int iter = 0; iter < 20; ++iter)
     {
         double Jxx = 0, Jxy = 0, Jxr = 0, Jyy = 0, Jyr = 0, Jrr = 0;
         double bx = 0, by = 0, br = 0;
@@ -326,8 +347,7 @@ void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
             const double dx = h.GetX() - cx;
             const double dy = h.GetZ() - cz;
             const double d = std::sqrt(dx * dx + dy * dy);
-            if (d < 1e-9)
-                continue;
+            if (d < 1e-9) continue;
             const double r = d - R;
             const double Jx = -dx / d, Jy = -dy / d, JR = -1.0;
             Jxx += Jx * Jx; Jxy += Jx * Jy; Jxr += Jx * JR;
@@ -336,8 +356,7 @@ void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
         }
         const double dt = Jxx * (Jyy * Jrr - Jyr * Jyr) - Jxy * (Jxy * Jrr - Jyr * Jxr)
                           + Jxr * (Jxy * Jyr - Jyy * Jxr);
-        if (std::abs(dt) < 1e-12)
-            break;
+        if (std::abs(dt) < 1e-12) break;
         const double dxc = -(bx * (Jyy * Jrr - Jyr * Jyr) - Jxy * (by * Jrr - Jyr * br)
                              + Jxr * (by * Jyr - Jyy * br)) / dt;
         const double dyc = -(Jxx * (by * Jrr - Jyr * br) - bx * (Jxy * Jrr - Jyr * Jxr)
@@ -347,8 +366,7 @@ void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
         cx += dxc;
         cz += dyc;
         R += dRc;
-        if (std::abs(dxc) + std::abs(dyc) + std::abs(dRc) < 1e-6)
-            break;
+        if (std::abs(dxc) + std::abs(dyc) + std::abs(dRc) < 1e-6) break;
     }
     if (!(R > 0) || !std::isfinite(R))
         return;
