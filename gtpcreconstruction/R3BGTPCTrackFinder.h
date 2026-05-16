@@ -94,11 +94,19 @@ class R3BGTPCTrackFinder
     }
     void DisableVertexConstraint() { fVertexSigma = -1.0; }
 
+    /// Huber-weighted Gauss-Newton refit. When fHuberK_cm > 0, each
+    /// residual r in the GN inner loop is multiplied by w(r) = 1 if
+    /// |r| ≤ fHuberK_cm, else fHuberK_cm / |r|. This downweights outlier
+    /// hits (δ-rays, misclustering) so they don't pull the circle. k≈1.5×σ_hit
+    /// (i.e. ~1.5 mm for σ_xy=1 mm) gives 95% efficiency at the normal.
+    void SetHuberK(double k_cm) { fHuberK_cm = k_cm; }
+
   private:
     bool fUseDnnScaling{ true };
     double fVertexX{ 0.0 };
     double fVertexZ{ 0.0 };
     double fVertexSigma{ -1.0 }; // <0 disables
+    double fHuberK_cm{ -1.0 };    // <=0 disables (pure L2)
 
   public:
 

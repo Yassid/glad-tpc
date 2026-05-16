@@ -345,6 +345,7 @@ void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
     // sigma_vertex ~ 1 mm by default). The lever arm is the geometric
     // distance from the vertex to the centroid of the in-pad hits.
     const double w_vtx = (fVertexSigma > 0) ? (0.1 / fVertexSigma) * (0.1 / fVertexSigma) : 0.0;
+    const bool useHuber = (fHuberK_cm > 0.0);
     for (int iter = 0; iter < 30; ++iter)
     {
         double Jxx = 0, Jxy = 0, Jxr = 0, Jyy = 0, Jyr = 0, Jrr = 0;
@@ -356,10 +357,14 @@ void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
             const double d = std::sqrt(dx * dx + dy * dy);
             if (d < 1e-9) continue;
             const double r = d - R;
+            // Huber re-weighting: w(r) = 1 if |r| ≤ k, else k/|r|. Effectively
+            // shrinks far-from-circle hits (δ-rays, misclusterings) so they
+            // don't pull the geometric optimum.
+            const double w = (useHuber && std::abs(r) > fHuberK_cm) ? (fHuberK_cm / std::abs(r)) : 1.0;
             const double Jx = -dx / d, Jy = -dy / d, JR = -1.0;
-            Jxx += Jx * Jx; Jxy += Jx * Jy; Jxr += Jx * JR;
-            Jyy += Jy * Jy; Jyr += Jy * JR; Jrr += JR * JR;
-            bx += Jx * r; by += Jy * r; br += JR * r;
+            Jxx += w * Jx * Jx; Jxy += w * Jx * Jy; Jxr += w * Jx * JR;
+            Jyy += w * Jy * Jy; Jyr += w * Jy * JR; Jrr += w * JR * JR;
+            bx  += w * Jx * r;  by  += w * Jy * r;  br  += w * JR * r;
         }
         if (w_vtx > 0.0)
         {
