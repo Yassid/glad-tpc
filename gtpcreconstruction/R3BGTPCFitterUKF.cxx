@@ -110,13 +110,50 @@ std::unique_ptr<R3BGTPCFittedTrackData> R3BGTPCFitterUKF::FitTrack(R3BGTPCTrackD
                                     c0.GetY() * fInputUnit_mm,
                                     c0.GetZ() * fInputUnit_mm);
 
+    // Build the seed momentum direction from the PRA helix params (R,
+    // GeoCenter, θ_y) rather than the noisy c1−c0 difference. The tangent
+    // in the (x,z) bending plane at first cluster is perpendicular to the
+    // radial direction from (cx,cz)→c0; the y-component is governed by
+    // θ_y (the angle from +y of the helix). Sign of the in-plane tangent
+    // and of py is fixed by the second cluster.
     ROOT::Math::XYZVector initialMom;
+    auto cen = track->GetGeoCenter();
+    const double cx = cen.first, cz = cen.second;
+    const double theta_y = track->GetGeoTheta();
     const auto& c1 = clusters->at(1);
-    ROOT::Math::XYZVector dir(c1.GetX() - c0.GetX(), c1.GetY() - c0.GetY(), c1.GetZ() - c0.GetZ());
-    if (dir.R() > 1e-6)
-        initialMom = p_seed * dir.Unit();
-    else
-        initialMom = ROOT::Math::XYZVector(p_seed, 0, 0);
+    bool seedFromHelix = std::isfinite(cx) && std::isfinite(cz) && std::isfinite(theta_y);
+    if (seedFromHelix)
+    {
+        const double rx = c0.GetX() - cx;
+        const double rz = c0.GetZ() - cz;
+        const double rn = std::hypot(rx, rz);
+        if (rn < 1e-6) seedFromHelix = false;
+        if (seedFromHelix)
+        {
+            // Two tangent candidates; pick the one pointing toward c1.
+            const double t1x = -rz / rn, t1z = rx / rn;
+            const double dx = c1.GetX() - c0.GetX(), dz = c1.GetZ() - c0.GetZ();
+            const double sgn = (t1x * dx + t1z * dz >= 0) ? 1.0 : -1.0;
+            const double tx_xz = sgn * t1x, tz_xz = sgn * t1z;
+            const double sinTh = std::sin(theta_y);
+            const double cosTh = std::cos(theta_y);
+            const double dy_sgn = (c1.GetY() - c0.GetY() >= 0) ? 1.0 : -1.0;
+            // 3D unit direction: in-plane component magnitude sin(θ_y), y comp cos(θ_y) with the
+            // sign matching the observed y drift between the first two clusters.
+            const double dx3 = sinTh * tx_xz;
+            const double dy3 = dy_sgn * cosTh;
+            const double dz3 = sinTh * tz_xz;
+            initialMom = p_seed * ROOT::Math::XYZVector(dx3, dy3, dz3);
+        }
+    }
+    if (!seedFromHelix)
+    {
+        ROOT::Math::XYZVector dir(c1.GetX() - c0.GetX(), c1.GetY() - c0.GetY(), c1.GetZ() - c0.GetZ());
+        if (dir.R() > 1e-6)
+            initialMom = p_seed * dir.Unit();
+        else
+            initialMom = ROOT::Math::XYZVector(p_seed, 0, 0);
+    }
 
     // -- 2. Initial covariance: σ_pos = fMeasSigma_mm, σ_p = fMomSigmaFrac·p,
     //       σ_angles = 1° (matches AtFitterUKF::GetInitialCovariance)

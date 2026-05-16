@@ -163,6 +163,55 @@ void vertex_refit(double w_vtx_input = 1.0, TString tag = "goodevt")
             printf("   gauss mean=%+.3f sigma=%.3f", f->GetParameter(1), f->GetParameter(2));
         printf("\n");
     };
+
+    // Also compute σ_p/p at the SEED level using the helix's theta_y (y-vs-φ
+    // slope) to convert p_T to p_total. This isolates θ errors from R errors.
+    auto* hPSeed = new TH1F("hPSeed",";p_{tot,seed}/p_{MC}-1 long;",80,-1,1);
+    auto* hPSeedM = new TH1F("hPSeedM",";p_{tot,seed}/p_{MC}-1 mid;",80,-1,1);
+    int nL2=0, nM2=0;
+    double sL2=0, sL22=0, sM2=0, sM22=0;
+    for (Long64_t i = 0; i < std::min(tS->GetEntries(), tT->GetEntries()); ++i) {
+        tS->GetEntry(i); tT->GetEntry(i);
+        if (trks->GetEntries() == 0) continue;
+        auto* tr = (R3BGTPCTrackData*)trks->At(0);
+        auto& hits = tr->GetHitArray();
+        if (hits.size() < 10) continue;
+        R3BMCTrack* pi = nullptr;
+        for (int j = 0; j < mc->GetEntries(); ++j) {
+            auto* m = (R3BMCTrack*)mc->At(j);
+            if (m->GetMotherId()==-1 && m->GetPdgCode()==-211) { pi = m; break; }
+        }
+        if (!pi) continue;
+        double pMC = std::sqrt(pi->GetPx()*pi->GetPx() + pi->GetPy()*pi->GetPy() + pi->GetPz()*pi->GetPz())*1000;
+        double xmn=1e9,xmx=-1e9,zmn=1e9,zmx=-1e9;
+        for (auto& h : hits) { xmn=std::min(xmn,(double)h.GetX()); xmx=std::max(xmx,(double)h.GetX());
+                               zmn=std::min(zmn,(double)h.GetZ()); zmx=std::max(zmx,(double)h.GetZ()); }
+        double chord = std::sqrt((xmx-xmn)*(xmx-xmn)+(zmx-zmn)*(zmx-zmn));
+        // p_tot_seed = p_T_seed / sin(theta_from_y), p_T = 0.3*B*R_truth approximated by R_fit
+        double R_pipeline = tr->GetGeoRadius();
+        double theta = tr->GetGeoTheta();
+        if (!std::isfinite(R_pipeline) || R_pipeline <= 0 || !std::isfinite(theta)) continue;
+        double pT_seed = 0.3 * 2.0 * R_pipeline * 10.0; // R in cm → m: ÷100 then ×100 → cm, actually need R*0.01 m = R cm /100; so 0.3*2*R/100 GeV→ MeV : ×1000
+        pT_seed = 0.3 * 2.0 * (R_pipeline/100.0) * 1000.0; // MeV/c
+        double sinTh = std::sin(theta);
+        if (std::abs(sinTh) < 0.1) continue;
+        double p_seed = pT_seed / sinTh;
+        double r = p_seed/pMC - 1;
+        if (chord >= 16) { ++nL2; sL2 += std::log(p_seed/pMC); sL22 += std::log(p_seed/pMC)*std::log(p_seed/pMC); hPSeed->Fill(r); }
+        else if (chord >= 12) { ++nM2; sM2 += std::log(p_seed/pMC); sM22 += std::log(p_seed/pMC)*std::log(p_seed/pMC); hPSeedM->Fill(r); }
+    }
+    auto report2 = [](const char* lbl, int n, double sum, double sum2, TH1F* h) {
+        if (n == 0) return;
+        double m=sum/n, s=std::sqrt(std::max(0.0, sum2/n - m*m));
+        printf("  %-30s  N=%3d  median=%.3f  log-rms=%.3f", lbl, n, std::exp(m), s);
+        h->Fit("gaus","Q","",-0.5,0.5);
+        if (auto* f = h->GetFunction("gaus"))
+            printf("   gauss mean=%+.3f sigma=%.3f", f->GetParameter(1), f->GetParameter(2));
+        printf("\n");
+    };
+    printf("\nSeed p_total (using GeoTheta from y-vs-φ slope):\n");
+    report2("long: p_seed/p_MC - 1", nL2, sL2, sL22, hPSeed);
+    report2("mid:  p_seed/p_MC - 1", nM2, sM2, sM22, hPSeedM);
     printf("=== Vertex refit comparison (w_vtx = %.2f) ===\n", w_vtx_input);
     printf("Long chord (>=16):\n");
     report("baseline (no vertex)", baseLong);
