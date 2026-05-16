@@ -65,17 +65,34 @@ class R3BGTPCHit2Track : public FairTask
     /// Use this from the macro to call SetTcluster / SetMcluster / etc.
     R3BGTPCTrackFinder* GetTrackFinder() { return fTrackFinder; }
 
+    /// Use the MC primary particle's StartXYZ as the vertex pseudo-hit in
+    /// R3BGTPCTrackFinder's Pratt+GN circle fit. The MCTrack branch is
+    /// typically dropped by Cal2Hit, so we pull it from a sidecar sim file
+    /// indexed by event number (set via SetMCSimFile).
+    void SetUseMCVertex(Bool_t use) { fUseMCVertex = use; }
+    void SetVertexPdg(Int_t pdg) { fVertexPdg = pdg; }
+    void SetVertexSigmaCm(Double_t s) { fVertexSigmaCm = s; }
+    void SetMCSimFile(const TString& path) { fMCSimFile = path; }
+
   private:
     void SetParameter();
 
     TClonesArray* fHitCA;
     TClonesArray* fTrackCA;
+    TClonesArray* fMCTrackCA{ nullptr };
+    TFile*  fMCSimFilePtr{ nullptr };
+    TTree*  fMCSimTree{ nullptr };
+    Long64_t fEventCounter{ -1 };
+    TString fMCSimFile{};
 
-    Bool_t fOnline;     // Selector for online data storage
-    Bool_t fUseRiemann; // Use the ported AT-TPC Riemann RANSAC finder
+    Bool_t fOnline;        // Selector for online data storage
+    Bool_t fUseRiemann;    // Use the ported AT-TPC Riemann RANSAC finder
+    Bool_t fUseMCVertex{ kFALSE };
+    Int_t  fVertexPdg{ -211 };
+    Double_t fVertexSigmaCm{ 0.05 }; // 0.5 mm
 
     R3BGTPCTrackFinder* fTrackFinder{};
     R3BGTPCTrackFinderRiemann* fRiemannFinder{};
 
-    ClassDef(R3BGTPCHit2Track, 2);
+    ClassDef(R3BGTPCHit2Track, 3);
 };

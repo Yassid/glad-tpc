@@ -21,6 +21,7 @@
 #include "R3BGTPCHit2Track.h"
 #include "R3BGTPCHitData.h"
 #include "R3BGTPCTrackData.h"
+#include "R3BMCTrack.h"
 // #include "R3BGTPCHitPar.h"
 
 #include "dnn.h"
@@ -101,6 +102,30 @@ InitStatus R3BGTPCHit2Track::Init()
     if (!fHitCA)
         LOG(fatal) << "Init: No GTPCHitData";
 
+    // Optional: MC truth for vertex constraint. Two routes:
+    //   1) MCTrack branch propagated through the chain (cleanest, but the
+    //      reco stage typically drops it).
+    //   2) Sidecar sim file opened directly, indexed by event counter
+    //      (set via SetMCSimFile from the macro).
+    fMCTrackCA = (TClonesArray*)ioManager->GetObject("MCTrack");
+    if (fUseMCVertex && !fMCTrackCA && fMCSimFile.Length() > 0)
+    {
+        fMCSimFilePtr = TFile::Open(fMCSimFile);
+        if (fMCSimFilePtr && !fMCSimFilePtr->IsZombie())
+        {
+            fMCSimTree = (TTree*)fMCSimFilePtr->Get("evt");
+            if (fMCSimTree)
+            {
+                fMCTrackCA = new TClonesArray("R3BMCTrack");
+                fMCSimTree->SetBranchAddress("MCTrack", &fMCTrackCA);
+                LOG(info) << "R3BGTPCHit2Track: MC vertex from sidecar sim file "
+                          << fMCSimFile << " (" << fMCSimTree->GetEntries() << " entries)";
+            }
+        }
+    }
+    if (fMCTrackCA && fUseMCVertex)
+        LOG(info) << "R3BGTPCHit2Track: MC vertex constraint enabled";
+
     // Register output - Track
     fTrackCA = new TClonesArray("R3BGTPCTrackData", 50);
     if (!fOnline)
@@ -125,6 +150,34 @@ InitStatus R3BGTPCHit2Track::ReInit()
 void R3BGTPCHit2Track::Exec(Option_t* opt)
 {
     Reset(); // Reset entries in output arrays, local arrays
+
+    // Set per-event vertex on the legacy track-finder. Constants from the
+    // HYDRA Prototype geometry (target at world x=-2.7, chamber active region
+    // at world x=4.2..13.0 → local x_vtx = -6.9). The z is taken from MC
+    // truth here; a beam-tracker replacement would slot in identically.
+    if (fUseMCVertex && fMCTrackCA && fTrackFinder)
+    {
+        if (fMCSimTree) fMCSimTree->GetEntry(fEventCounter);
+        const double offX = 4.2, offZ = 260.2;
+        bool found = false;
+        for (Int_t j = 0; j < fMCTrackCA->GetEntries(); ++j)
+        {
+            auto* m = static_cast<R3BMCTrack*>(fMCTrackCA->At(j));
+            if (m->GetMotherId() == -1 && m->GetPdgCode() == fVertexPdg)
+            {
+                const double vxL = m->GetStartX() - offX;
+                const double vzL = m->GetStartZ() - offZ;
+                fTrackFinder->SetVertexConstraint(vxL, vzL, fVertexSigmaCm);
+                found = true;
+                break;
+            }
+        }
+        if (!found) fTrackFinder->DisableVertexConstraint();
+    }
+    else if (fTrackFinder)
+    {
+        fTrackFinder->DisableVertexConstraint();
+    }
 
     // Riemann RANSAC path — single-pass, std::vector-based. Skips the entire
     // triplet/PointCloud machinery and persists tracks straight into fTrackCA.
@@ -231,6 +284,7 @@ void R3BGTPCHit2Track::Reset()
     LOG(debug) << "Clearing TrackData Structure";
     if (fTrackCA)
         fTrackCA->Clear();
+    ++fEventCounter;
 }
 
 ClassImp(R3BGTPCHit2Track)

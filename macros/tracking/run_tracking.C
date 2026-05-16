@@ -38,19 +38,35 @@ void run_tracking(TString fileName = "output_reco.root")
     R3BGTPCHit2Track* hit2cal = new R3BGTPCHit2Track();
 
     // TripClust defaults that match the upstream Opt / IPOL paper and the
-    // dev-branch behaviour we validated to work on HYDRA Prototype. Listed
-    // explicitly so they're discoverable from the macro; passing them
-    // through the setters is a no-op vs the built-in defaults.
+    // dev-branch behaviour we validated to work on HYDRA Prototype.
     if (auto* tc = hit2cal->GetTrackFinder())
     {
-        tc->SetRsmooth(2.0f);    // r — smoothing radius (× dNN)
-        tc->SetKtriplet(19);     // k — neighbours per triplet
-        tc->SetNtriplet(2);      // n — best triplets per midpoint
-        tc->SetAtriplet(0.03f);  // a — max (1 - cos α)
-        tc->SetScluster(0.3f);   // s — clustering scale (× dNN)
-        tc->SetTcluster(4.0f);   // t — cluster-distance threshold
-        tc->SetMcluster(15);     // m — min triplets per cluster
+        tc->SetRsmooth(2.0f);
+        tc->SetKtriplet(19);
+        tc->SetNtriplet(2);
+        tc->SetAtriplet(0.03f);
+        tc->SetScluster(0.3f);
+        tc->SetTcluster(4.0f);
+        tc->SetMcluster(15);
         tc->SetUseDnnScaling(true);
+
+    }
+    // Vertex constraint on the seed circle fit. Per-event vertex pulled
+    // from the MCTrack branch (set USE_VERTEX=1 to enable). Drops σ_R/R
+    // from ~23% to ~3% on long-chord events in HYDRA Prototype since the
+    // target's known x position adds ~7 cm of lever arm to the 9 cm
+    // in-pad chord. VERTEX_SIGMA_CM controls how strongly it is enforced
+    // (default 0.5 mm — slightly tighter than typical hit noise).
+    if (const char* uv = gSystem->Getenv("USE_VERTEX"); uv && std::atoi(uv) == 1)
+    {
+        hit2cal->SetUseMCVertex(kTRUE);
+        if (const char* e = gSystem->Getenv("VERTEX_SIGMA_CM"); e && std::atof(e) > 0)
+            hit2cal->SetVertexSigmaCm(std::atof(e));
+        // The reco stage drops MCTrack; open the sim file as a sidecar.
+        TString simPath = workDir + "/glad-tpc/macros/sim/Prototype/sim" + suffix + ".root";
+        hit2cal->SetMCSimFile(simPath);
+        std::cout << "[run_tracking] MC vertex constraint enabled (sim sidecar: "
+                  << simPath << ")" << std::endl;
     }
 
     // Set USE_RIEMANN=1 to switch to the ported AT-TPC Riemann RANSAC.

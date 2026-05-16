@@ -338,7 +338,14 @@ void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
     // Geometric refinement (Gauss-Newton on Σ(d − R)²) from the Pratt seed.
     // Pratt is already unbiased to leading order; this nails the geometric
     // optimum in 2-5 iterations.
-    for (int iter = 0; iter < 20; ++iter)
+    //
+    // Vertex constraint: when fVertexSigma > 0, append one extra residual
+    // for a virtual point at (fVertexX, fVertexZ) with effective weight
+    // w = (sigma_hit / fVertexSigma)² ≈ 1 (we assume sigma_hit ~ 1 mm and
+    // sigma_vertex ~ 1 mm by default). The lever arm is the geometric
+    // distance from the vertex to the centroid of the in-pad hits.
+    const double w_vtx = (fVertexSigma > 0) ? (0.1 / fVertexSigma) * (0.1 / fVertexSigma) : 0.0;
+    for (int iter = 0; iter < 30; ++iter)
     {
         double Jxx = 0, Jxy = 0, Jxr = 0, Jyy = 0, Jyr = 0, Jrr = 0;
         double bx = 0, by = 0, br = 0;
@@ -353,6 +360,20 @@ void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
             Jxx += Jx * Jx; Jxy += Jx * Jy; Jxr += Jx * JR;
             Jyy += Jy * Jy; Jyr += Jy * JR; Jrr += JR * JR;
             bx += Jx * r; by += Jy * r; br += JR * r;
+        }
+        if (w_vtx > 0.0)
+        {
+            const double dx = fVertexX - cx;
+            const double dy = fVertexZ - cz;
+            const double d = std::sqrt(dx * dx + dy * dy);
+            if (d > 1e-9)
+            {
+                const double r = d - R;
+                const double Jx = -dx / d, Jy = -dy / d, JR = -1.0;
+                Jxx += w_vtx * Jx * Jx; Jxy += w_vtx * Jx * Jy; Jxr += w_vtx * Jx * JR;
+                Jyy += w_vtx * Jy * Jy; Jyr += w_vtx * Jy * JR; Jrr += w_vtx * JR * JR;
+                bx  += w_vtx * Jx * r;  by  += w_vtx * Jy * r;  br  += w_vtx * JR * r;
+            }
         }
         const double dt = Jxx * (Jyy * Jrr - Jyr * Jyr) - Jxy * (Jxy * Jrr - Jyr * Jxr)
                           + Jxr * (Jxy * Jyr - Jyy * Jxr);

@@ -79,8 +79,26 @@ class R3BGTPCTrackFinder
     void SetUseDnnScaling(bool use) { fUseDnnScaling = use; }
     bool UseDnnScaling() const { return fUseDnnScaling; }
 
+    /// Add a vertex constraint to the Gauss-Newton circle fit, in the (x, z)
+    /// bending plane and in chamber-local cm. The constraint enters as one
+    /// extra residual with effective weight = (σ_xy / fVertexSigma)². Set
+    /// fVertexSigma <= 0 (or call SetVertexConstraint with neg) to disable.
+    /// This is the highest-leverage knob on small chambers: extending the
+    /// effective chord from ~9 cm (in-pad-plane) to ~16 cm (target-to-far
+    /// wall) drops the Gluckstern floor by (L_new/L_old)² ≈ 3×.
+    void SetVertexConstraint(double xL, double zL, double sigma_cm = 0.1)
+    {
+        fVertexX = xL;
+        fVertexZ = zL;
+        fVertexSigma = sigma_cm;
+    }
+    void DisableVertexConstraint() { fVertexSigma = -1.0; }
+
   private:
     bool fUseDnnScaling{ true };
+    double fVertexX{ 0.0 };
+    double fVertexZ{ 0.0 };
+    double fVertexSigma{ -1.0 }; // <0 disables
 
   public:
 
