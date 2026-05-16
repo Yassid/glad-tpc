@@ -18,6 +18,7 @@
 #include "R3BGTPCTrackData.h"
 // #include "R3BGTPCHitPar.h" TrackPar?
 #include "R3BGTPCTrackFinder.h"
+#include "R3BGTPCTrackFinderRiemann.h"
 
 class R3BGTPCHit2Track : public FairTask
 {
@@ -49,26 +50,32 @@ class R3BGTPCHit2Track : public FairTask
     /** Accessor to select online mode **/
     void SetOnline(Bool_t option) { fOnline = option; }
 
+    /// Switch between the ported AT-TPC Riemann RANSAC finder and the
+    /// legacy triplet-clustering path. Default OFF: in the HYDRA Prototype
+    /// single-pion case the triplet path gathers all hits into one cluster
+    /// and lets Pratt+GN see the whole arc, giving a tighter R distribution
+    /// than the RANSAC's inlier subset. Enable for multi-particle AT-TPC-
+    /// style events where Riemann's smart-seed separation matters.
+    void SetUseRiemann(Bool_t use) { fUseRiemann = use; }
+
+    /// Pass-through RANSAC knobs (no-ops when fUseRiemann == false).
+    R3BGTPCTrackFinderRiemann* GetRiemannFinder() { return fRiemannFinder; }
+
+    /// Pass-through TripClust knobs (no-ops when fUseRiemann == true).
+    /// Use this from the macro to call SetTcluster / SetMcluster / etc.
+    R3BGTPCTrackFinder* GetTrackFinder() { return fTrackFinder; }
+
   private:
     void SetParameter();
 
-    // TArrayF* fHitParams;
-    // or maybe
-    // Double_t fHitParam;
-
-    // R3BGTPCHitPar* fHit_Par; /**< Parameter container. >*/
     TClonesArray* fHitCA;
     TClonesArray* fTrackCA;
 
-    Bool_t fOnline; // Selector for online data storage
-
-    /** Private method AddTrackData**/
-    //** Adds a Track to the TrackCollection
-    // R3BGTPCTrackData* AddTrackData(std::size_t trackId,
-    // std::vector<R3BGTPCHitData>& hitArray,std::vector<R3BGTPCHitData>*
-    // hitClusterArray);
+    Bool_t fOnline;     // Selector for online data storage
+    Bool_t fUseRiemann; // Use the ported AT-TPC Riemann RANSAC finder
 
     R3BGTPCTrackFinder* fTrackFinder{};
+    R3BGTPCTrackFinderRiemann* fRiemannFinder{};
 
-    ClassDef(R3BGTPCHit2Track, 1);
+    ClassDef(R3BGTPCHit2Track, 2);
 };

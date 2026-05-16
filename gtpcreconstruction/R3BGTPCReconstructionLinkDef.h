@@ -21,6 +21,7 @@
 #pragma link off all functions;
 
 #pragma link C++ class R3BGTPCTrackFinder+;
+#pragma link C++ class R3BGTPCTrackFinderRiemann-!;
 #pragma link C++ class genfit::R3BGTPCSpacepointMeasurement+;
 #pragma link C++ class R3BGTPCFitterUKF-!;
 

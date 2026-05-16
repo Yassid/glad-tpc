@@ -67,5 +67,22 @@ class R3BGTPCTrackFinder
     void SetAtriplet(float a) { inputParams.a = a; }
     void SetTcluster(float t) { inputParams.t = t; }
 
+    /// Live tc_params view for R3BGTPCHit2Track::Exec — keeps the legacy
+    /// triplclust Opt-defaults code path while letting macros override
+    /// individual knobs via the SetXxx setters above.
+    const tc_params& GetInputParams() const { return inputParams; }
+
+    /// When true, R3BGTPCHit2Track multiplies r and s by the data's dNN
+    /// (matches the upstream triplclust Opt defaults: r=2·dNN, s=0.3·dNN).
+    /// When false, r and s are used literally — useful if the macro pins
+    /// absolute mm-scale values.
+    void SetUseDnnScaling(bool use) { fUseDnnScaling = use; }
+    bool UseDnnScaling() const { return fUseDnnScaling; }
+
+  private:
+    bool fUseDnnScaling{ true };
+
+  public:
+
     ClassDef(R3BGTPCTrackFinder, 1);
 };

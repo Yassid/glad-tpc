@@ -32,12 +32,15 @@
 // R3BGTPCHit2Track: Constructor
 R3BGTPCHit2Track::R3BGTPCHit2Track()
     : FairTask("R3B GTPC Hit to Track")
-    //    , fHitParams(NULL)
-    //, fHit_Par(NULL)
     , fHitCA(NULL)
     , fTrackCA(NULL)
     , fOnline(kFALSE)
+    , fUseRiemann(kFALSE) // legacy triplet+Pratt is better in single-pion Prototype
 {
+    // Create the finders eagerly so the macro can configure them before
+    // FairRunAna::Init() runs SetParContainers().
+    fTrackFinder = new R3BGTPCTrackFinder();
+    fRiemannFinder = new R3BGTPCTrackFinderRiemann();
 }
 
 R3BGTPCHit2Track::~R3BGTPCHit2Track()
@@ -47,6 +50,8 @@ R3BGTPCHit2Track::~R3BGTPCHit2Track()
         delete fHitCA;
     if (fTrackCA)
         delete fTrackCA;
+    delete fTrackFinder;
+    delete fRiemannFinder;
 }
 
 void R3BGTPCHit2Track::SetParContainers()
@@ -69,7 +74,8 @@ void R3BGTPCHit2Track::SetParContainers()
     //   LOG(info) << "R3BGTPCCal2Hit:: GTPCHitPar container open";
     // }
 
-    fTrackFinder = new R3BGTPCTrackFinder();
+    // Finders are constructed in the R3BGTPCHit2Track ctor so the macro can
+    // configure them before FairRunAna::Init() runs SetParContainers().
 }
 
 void R3BGTPCHit2Track::SetParameter()
@@ -120,13 +126,40 @@ void R3BGTPCHit2Track::Exec(Option_t* opt)
 {
     Reset(); // Reset entries in output arrays, local arrays
 
-    // if (!fTrack_Par)
-    // {
-    //   LOG(warn) << "R3BGTPCHit2Track::NO Container Parameter!!";
-    // }
+    // Riemann RANSAC path — single-pass, std::vector-based. Skips the entire
+    // triplet/PointCloud machinery and persists tracks straight into fTrackCA.
+    if (fUseRiemann)
+    {
+        const Int_t nHits = fHitCA->GetEntries();
+        std::vector<R3BGTPCHitData> hits;
+        hits.reserve(nHits);
+        for (Int_t i = 0; i < nHits; ++i)
+        {
+            auto* h = static_cast<R3BGTPCHitData*>(fHitCA->At(i));
+            if (h)
+                hits.push_back(*h);
+        }
 
-    Opt opt_params;
-    int opt_verbose = opt_params.get_verbosity();
+        auto tracks = fRiemannFinder->FindTracks(hits);
+
+        for (auto& trk : tracks)
+        {
+            TClonesArray& clref = *fTrackCA;
+            const Int_t size = clref.GetEntriesFast();
+            auto* persisted = new (clref[size])
+                R3BGTPCTrackData(trk.GetTrackId(), std::move(trk.GetHitArray()),
+                                 std::vector<R3BGTPCHitClusterData>{});
+            persisted->SetGeoCenter(trk.GetGeoCenter());
+            persisted->SetGeoRadius(trk.GetGeoRadius());
+            persisted->SetGeoTheta(trk.GetGeoTheta());
+        }
+        return;
+    }
+
+    // Read TripClust parameters directly from fTrackFinder so the macro can
+    // tune them via the SetScluster/SetKtriplet/... setters.
+    const tc_params& tp = fTrackFinder->GetInputParams();
+    const int opt_verbose = 0;
     PointCloud cloud_xyz;
     fTrackFinder->eventToClusters(fHitCA, cloud_xyz);
 
@@ -136,61 +169,55 @@ void R3BGTPCHit2Track::Exec(Option_t* opt)
         return;
     }
 
-    if (opt_params.needs_dnn())
+    // Upstream Opt defaults: r and s are multiples of dNN (the data's first-
+    // quartile nearest-neighbour distance). Replicate that here, gated by
+    // fTrackFinder->UseDnnScaling() so a macro can pin absolute values.
+    double r_eff = tp.r;
+    double s_eff = tp.s;
+    if (fTrackFinder->UseDnnScaling())
     {
-        double dnn = std::sqrt(first_quartile(cloud_xyz));
-        if (opt_verbose > 0)
-        {
-            std::cout << "[Info] computed dnn: " << dnn << std::endl;
-        }
-        opt_params.set_dnn(dnn);
+        const double dnn = std::sqrt(first_quartile(cloud_xyz));
         if (dnn == 0.0)
         {
             std::cerr << "[Error] dnn computed as zero. "
                       << "Suggestion: remove doublets, e.g. with 'sort -u'" << std::endl;
             return;
         }
+        r_eff = tp.r * dnn;
+        s_eff = tp.s * dnn;
     }
 
     // Step 1) smoothing by position averaging of neighboring points
     PointCloud cloud_xyz_smooth;
-    smoothen_cloud(cloud_xyz, cloud_xyz_smooth, opt_params.get_r());
+    smoothen_cloud(cloud_xyz, cloud_xyz_smooth, r_eff);
 
     // Step 2) finding triplets of approximately collinear points
     std::vector<triplet> triplets;
-    generate_triplets(cloud_xyz_smooth, triplets, opt_params.get_k(), opt_params.get_n(), opt_params.get_a());
+    generate_triplets(cloud_xyz_smooth, triplets, tp.k, tp.n, tp.a);
 
-    // Step 3) single link hierarchical clustering of the triplets
+    // Step 3) single link hierarchical clustering of the triplets. Match the
+    // upstream Opt defaults: t is literal (tauto=false), no dmax filter,
+    // single linkage.
     cluster_group cl_group;
     if (cloud_xyz_smooth.size() < 10)
         return;
     compute_hc(cloud_xyz_smooth,
                cl_group,
                triplets,
-               opt_params.get_s(),
-               opt_params.get_t(),
-               opt_params.is_tauto(),
-               opt_params.get_dmax(),
-               opt_params.is_dmax(),
-               opt_params.get_linkage(),
+               s_eff,
+               tp.t,
+               /*tauto=*/false,
+               /*dmax=*/0.0,
+               /*isdmax=*/false,
+               /*linkage=*/SINGLE,
                opt_verbose);
 
-    // Step 4) pruning by removal of small clusters ...
-    cleanup_cluster_group(cl_group, opt_params.get_m(), opt_verbose);
+    // Step 4) pruning by removal of small clusters
+    cleanup_cluster_group(cl_group, tp.m, opt_verbose);
     cluster_triplets_to_points(triplets, cl_group);
-    // .. and (optionally) by splitting up clusters at gaps > dmax
-    if (opt_params.is_dmax())
-    {
-        cluster_group cleaned_up_cluster_group;
-        for (cluster_group::iterator cl = cl_group.begin(); cl != cl_group.end(); ++cl)
-        {
-            max_step(cleaned_up_cluster_group, *cl, cloud_xyz, opt_params.get_dmax(), opt_params.get_m() + 2);
-        }
-        cl_group = cleaned_up_cluster_group;
-    }
 
     // store cluster labels in points
-    add_clusters(cloud_xyz, cl_group, opt_params.is_gnuplot());
+    add_clusters(cloud_xyz, cl_group, /*gnuplot=*/false);
 
     // Adapt clusters to AtTrack
     fTrackFinder->clustersToTrack(cloud_xyz, cl_group, fTrackCA, fHitCA);

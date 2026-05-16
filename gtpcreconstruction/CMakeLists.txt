@@ -33,6 +33,7 @@ set(SRCS
     triplclust/src/util.cxx
     triplclust/src/graph.cxx
     R3BGTPCTrackFinder.cxx
+    R3BGTPCTrackFinderRiemann.cxx
     R3BGTPCFitterUKF.cxx
 )
 
