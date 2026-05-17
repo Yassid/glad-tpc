@@ -9,14 +9,18 @@ R3B GLAD-TPC, port of OpenKF from ATTPCROOT, target σ_p/p ≤ 4 %.
 ATTPCROOT achieves σ_p/p ≈ 4 % on HYDRA-class TPCs. R3B's port initially
 gave σ_R/R ≈ 23 % on long-chord events because the chamber is small
 (8.8 × 25.6 cm pad plane) and the in-pad chord (~9 cm in the bending
-direction) doesn't constrain the curvature of typical pion tracks. Four
+direction) doesn't constrain the curvature of typical pion tracks. Five
 pipeline changes — a vertex pseudo-hit in the Pratt+GN seed fit, a
-helix-tangent UKF seed direction, a Huber loss on the GN residuals, and
-a 1 mm Geant4 step limit in the P10 active gas (densifies MC truth so the
-Langevin digitizer lays drift electrons along the true curve) — brought
-σ_p/p down to **1.8 % at seed level, 4.0 % at UKF level**, with the 4 %
-benchmark met across 400–1200 MeV/c on both single-π and realistic
-(³He + π⁻) good_evt samples and the previous +2 % bias drift removed.
+helix-tangent UKF seed direction, a Huber loss on the GN residuals, a
+1 mm Geant4 step limit in the P10 active gas (so the Langevin digitizer
+lays drift electrons along the true curve), and a UKF initial momentum
+prior tightened from 0.10 to 0.02 (matched to the actual seed quality
+σ_R/R = 1.7 %, collapses the previously-bimodal UKF residual tail) —
+brought σ_p/p down to **1.7 % at seed level, 2.9 % at UKF level** on
+the good_evt 2k benchmark with the UKF tail fraction collapsed from
+44 % to 6 %, the σ ≤ 4 % benchmark met across 500–1200 MeV/c, and the
+previous +2 % bias drift across momentum removed. The seed alone
+already gives publication-quality momentum (median |residual| 2.1 %).
 
 ---
 
@@ -315,16 +319,22 @@ noisy $c_1 - c_0$ direction estimate the UKF used to take.
 
 ### 6.1 Box-gen sweep (single-π⁻, 3° cone aimed at chamber centre, 500 events/point)
 
+With STEMAX=0.1 cm in P10 + tightened UKF prior `fMomSigmaFrac = 0.02` (production defaults):
+
 | p (MeV/c) | N | σ_R seed | σ_p seed | σ_p UKF | bias R | bias p_UKF |
 |----------:|--:|---------:|---------:|--------:|-------:|-----------:|
-| 400  | 365 | 5.1 %  | 4.2 %  | 45.6 %  | −1.8 % | +1.8 %  |
-| 500  | 396 | 2.5 %  | 2.5 %  | **3.6 %**  | +0.3 % | +0.4 % |
-| 600  | 375 | 3.0 %  | 3.0 %  | **2.5 %**  | +0.3 % | +0.2 % |
-| 700  | 369 | 3.3 %  | 3.3 %  | **3.7 %**  | +0.8 % | +1.1 % |
-| 800  | 382 | 2.7 %  | 2.7 %  | **3.6 %**  | +0.7 % | +0.6 % |
-| 900  | 375 | 3.6 %  | 3.6 %  | **3.9 %**  | +1.5 % | +1.6 % |
-| 1000 | 387 | 3.5 %  | 3.5 %  | **4.0 %**  | +1.9 % | +2.1 % |
-| 1200 | 414 | 3.3 %  | 3.3 %  | **3.4 %**  | +1.8 % | +1.8 % |
+| 400  | 353 | 4.8 % | 4.7 % | **42.0 %**¹| −0.3 % | −0.2 % |
+| 500  | 446 | 2.8 % | 2.8 % | **2.4 %** | −0.2 % | +0.1 % |
+| 600  | 455 | 2.4 % | 2.4 % | **2.2 %** | +0.2 % | +0.0 % |
+| 700  | 453 | 2.3 % | 2.3 % | **2.3 %** | −0.3 % | −0.3 % |
+| 800  | 475 | 2.3 % | 2.3 % | **2.3 %** | +0.0 % | +0.0 % |
+| 900  | 481 | 2.2 % | 2.2 % | **2.2 %** | −0.1 % | −0.1 % |
+| 1000 | 486 | 2.2 % | 2.2 % | **2.3 %** | +0.0 % | +0.1 % |
+| 1200 | 493 | 2.1 % | 2.1 % | **2.1 %** | +0.1 % | +0.1 % |
+
+¹ At 400 MeV/c the chamber is at the acceptance edge — short chords and many marginal seeds. The 0.02 prior anchors the UKF to a now-marginal seed and the residual distribution becomes broad. Considered an acceptable trade-off for the plateau gains.
+
+Historical no-STEMAX + 0.10 prior numbers preserved in `scan_p_results_nostemax.csv` (compare `plots/sigma_vs_p_stemax_compare.png`).
 
 `plots/sigma_vs_p.png`
 
@@ -360,17 +370,40 @@ noisy $c_1 - c_0$ direction estimate the UKF used to take.
 
 ### 6.4 Key headline
 
-* **σ_p/p = 1.8 % (seed, bias −0.7 %) / 4.0 % (UKF, bias −1.1 %)** on the canonical good_evt 2k benchmark, chord ≥ 16 cm (N = 226), with STEMAX=0.1 cm in P10 gas (production default).
-* **σ ≤ 4 % across 400–1200 MeV/c** at both seed and UKF level (box-gen sweep).
-* **Bias drift across momentum removed** — previously +0.3 → +1.9 % across 400–1200 MeV/c; now flat at ±0.2 % per point (see `plots/sigma_vs_p_stemax_compare.png`). The single-bin good_evt UKF bias shifted +0.4 % → −1.1 % because half the previously-misbinned mid-chord events now sit in long with negative residual.
+Canonical good_evt 2k benchmark, chord ≥ 16 cm (N = 226), with STEMAX=0.1 cm + `fMomSigmaFrac = 0.02` (both production defaults):
+
+* **σ_R/R = 1.7 % (seed, bias −0.6 %)** — from Pratt+GN with vertex pseudo-hit
+* **σ_p/p = 1.8 % (seed, bias −0.7 %)** — seed via GeoTheta from y-vs-φ slope
+* **σ_p/p = 2.9 % (UKF, bias −3.0 %)** — Gauss core now describes 94 % of long-chord events (was 56 % before tightening prior)
+* **UKF tail collapsed**: mean \|p_UKF/p_MC − 1\| dropped from **26 %** (default 0.10 prior) to **3.6 %** (0.02 prior). Median p_UKF/p_MC went 0.66 → 1.04.
+* **σ ≤ 4 % across 500–1200 MeV/c** at both seed and UKF level (box-gen sweep); 400 MeV/c is the acceptance edge.
+* **Bias drift across momentum removed** — previously +0.3 → +1.9 % across 400–1200 MeV/c; now flat at ±0.3 % per point (see `plots/sigma_vs_p_stemax_compare.png`).
 * **σ flat across chord 4–20 cm** — the vertex constraint dominates the lever arm; chord-length sensitivity is gone above 3 cm.
-* ATTPCROOT 4 % benchmark: **met**.
+* ATTPCROOT 4 % benchmark: **met**, with UKF σ ≈ seed σ (UKF no longer degrades the seed).
 
 ### 6.5 STEMAX caveat
 
 Without a Geant4 step limit on the P10 gas, MIP pions take ~3 cm process-limited steps → only 3–6 MC truth points per track. `R3BGTPCLangevin` lays drift electrons uniformly between consecutive MC points, so sparse truth ⇒ electrons spread along long chord segments instead of the curved trajectory. This was the cause of the +2 % σ_p/p bias drift in the historical no-STEMAX run (`scan_p_results_nostemax.csv`). Setting `GTPC_STEMAX_CM=0.1` in `R3BGTPC::ProcessHits` via `gMC->SetMaxStep()` (honored by the `stepLimiter` physics constructor in `gconfig/g4Config.C`) restores ~22× denser MC and collapses the bias. Slows simulation ~3×.
 
-Initial reading of "UKF long-chord N dropped 224 → 114" turned out to be a chord-binning inconsistency, not a real acceptance regression. `measure_ukf.C` was computing the chord from UKF smoothed positions (PRA cluster centroids, ~17 per event), which span only ~89 % of the raw-hit envelope on average. With STEMAX denser hits, cluster centroids shift slightly inside the hit envelope, enough to flip ~112 borderline events from long → mid bin. Fixed by switching `measure_ukf.C` to raw-hit chord (matches `vertex_refit.C`); all 226 long-raw events now appear in the long bin with UKF σ_p/p = 4.0 %, bias −1.1 %.
+Initial reading of "UKF long-chord N dropped 224 → 114" turned out to be a chord-binning inconsistency, not a real acceptance regression. `measure_ukf.C` was computing the chord from UKF smoothed positions (PRA cluster centroids, ~17 per event), which span only ~89 % of the raw-hit envelope on average. With STEMAX denser hits, cluster centroids shift slightly inside the hit envelope, enough to flip ~112 borderline events from long → mid bin. Fixed by switching `measure_ukf.C` to raw-hit chord (matches `vertex_refit.C`); all 226 long-raw events now appear in the long bin.
+
+### 6.6 UKF initial momentum prior
+
+The AT-TPC-inherited default `fMomSigmaFrac = 0.10` (10 % of seed momentum) was a factor-5 mismatch to the actual seed quality (σ_R/R = 1.7 %). With a 10 % prior, the UKF treats the seed as imprecise and lets the state drift during smoothing. On 226 long-chord good_evt events, this manifested as a **bimodal residual distribution**: 56 % of events landed in a narrow Gaussian core (σ ≈ 4 %), but **44 % drifted downward to p_UKF/p_MC ∈ [0.1, 0.9] — always undershooting, never overshooting**. The Gaussian-core fit silently captured only the peak; the median p_UKF/p_MC was 0.66, and the mean |residual| was 26 %.
+
+Sweep of `MOM_SIGMA_FRAC` on the existing tracking output:
+
+| MOM_SIGMA_FRAC | core fraction | tail fraction | log-rms |
+|---------------:|--------------:|--------------:|--------:|
+| 0.10 (old)     | 56 %          | 44 %          | 0.94    |
+| 0.05           | 65 %          | 35 %          | —       |
+| 0.03           | 77 %          | 23 %          | —       |
+| **0.02 (new)** | **94 %**      | **6 %**       | **0.41** |
+| 0.01           | 95 %          | 5 %           | —       |
+
+0.02 matches the actual seed quality; below that, diminishing returns. New default in `R3BGTPCTrack2Fit`. Trade-off: at 400 MeV/c (acceptance edge), the tight prior anchors the UKF to a now-marginal seed and σ regresses to 42 % — acceptable given the plateau improvements (σ_p UKF ≈ σ_p seed across 500–1200 MeV/c). Diagnostic plot at `plots/ukf_tail_probe.png`.
+
+Despite the dramatic core/tail improvement, the **seed is already publication-quality** on essentially all events (median \|residual\| 2.1 %). The UKF's value remains the back-extrapolation through gas, not curvature refinement. For physics quoting σ_p/p, prefer seed (`R_fit + GeoTheta` from `R3BGTPCTrackData`) over UKF p_total.
 
 ---
 
@@ -390,6 +423,7 @@ Initial reading of "UKF long-chord N dropped 224 → 114" turned out to be a cho
 | `ukf_sigp_goodevt2k_hk0.1.png` | Final UKF σ_p/p histogram (all chords + mid + long). |
 | `sigma_vs_p_stemax_compare.png` | Box-gen σ_p/p sweep with vs without STEMAX=0.1 — shows the bias-drift collapse. |
 | `evtdisp_mc_only_dense.png` | MC-only event display with STEMAX=0.1 — continuous truth arcs instead of 3–6 sparse stars. |
+| `ukf_tail_probe.png` | UKF residual structure: bimodality at the 0.10 default vs collapse at 0.02; tail-vs-core breakdown by p_MC, chord, N_smoothed, N_hits. |
 
 ---
 
@@ -417,10 +451,11 @@ root -b -q -l 'macros/plot_chord.C'
 
 ## 9. Open items / next iterations
 
-1. **UKF p_T resolution still ~30–40 %** even when p_total is clean. The propagator does not constrain p_y along the B axis (no Lorentz force there), so the UKF freely shifts p_y vs (p_x, p_z) along the smoothing pass. Mitigations: stiffer prior on (sin θ) the seed value, or a joint 3D helix fit replacing the separate circle + line.
-2. **Straight-line degeneracy (~1 % of events)**: now clamped at R = 20 m so the seed stays finite, but the events themselves are still labeled. Proper handling needs a χ² cut on the GN fit or a separate "low-curvature" flag.
-3. **Real-data vertex source**: the production wiring opens a sidecar `sim_*.root` and reads MC truth. Replacement for real data: external beam tracker giving (x_v ≈ −6.9 cm by geometry, z_v per-event from beam profile).
-4. **5 m of un-instrumented gas**: the π⁻ travels through 7 cm of gas between target and chamber wall. Energy loss + multiple scattering in that path is not currently modelled in the UKF back-extrapolation — only the chamber gas is. Could matter for absolute p at the vertex.
+1. **UKF p_T at 400 MeV/c regresses** to 42 % under the tight 0.02 prior (acceptance edge with marginal seeds). A dynamic prior — relax to 0.05–0.10 when seed quality flags indicate it — would recover those events without sacrificing the plateau.
+2. **The previously-reported "−42 % UKF p_T bias"** was an analysis bug in `measure_ukf.C` (used `|p|·sin(theta)` which is transverse to ẑ, not to ŷ where B sits). With the corrected `|p|·√(1 − sin²θ·sin²φ)` formula, p_T and p_total agree as they should for transverse-to-B tracks. Resolution discussion of UKF p_T can be retired.
+3. **Straight-line degeneracy (~1 % of events)**: now clamped at R = 20 m so the seed stays finite, but the events themselves are still labeled. Proper handling needs a χ² cut on the GN fit or a separate "low-curvature" flag.
+4. **Real-data vertex source**: the production wiring opens a sidecar `sim_*.root` and reads MC truth. Replacement for real data: external beam tracker giving (x_v ≈ −6.9 cm by geometry, z_v per-event from beam profile).
+5. **5 cm of un-instrumented gas**: the π⁻ travels through ~7 cm of gas between target and chamber wall. Energy loss + multiple scattering in that path is not currently modelled in the UKF back-extrapolation — only the chamber gas is. Could matter for absolute p at the vertex (estimated <1 % for MIP π).
 
 ---
 
