@@ -7,9 +7,9 @@ void evtdisp_z()
     gStyle->SetPadTickY(1);
 
     TString wd = gSystem->Getenv("VMCWORKDIR");
-    TFile fReco(wd + "/glad-tpc/macros/reco/output_reco_goodevt.root");
-    TFile fTrk("output_tracking_goodevt.root");
-    TFile fSim(wd + "/glad-tpc/macros/sim/Prototype/sim_goodevt.root");
+    TFile fReco(wd + "/glad-tpc/macros/reco/output_reco_goodevt2k.root");
+    TFile fTrk("output_tracking_goodevt2k.root");
+    TFile fSim(wd + "/glad-tpc/macros/sim/Prototype/sim_goodevt2k.root");
     auto* tR = (TTree*)fReco.Get("evt");
     auto* tT = (TTree*)fTrk.Get("evt");
     auto* tS = (TTree*)fSim.Get("evt");

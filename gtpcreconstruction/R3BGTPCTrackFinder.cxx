@@ -392,6 +392,14 @@ void R3BGTPCTrackFinder::SetTrackInitialParameters(R3BGTPCTrackData& track)
         cx += dxc;
         cz += dyc;
         R += dRc;
+        // Hard upper bound on R: when the (x,z) hits + vertex happen to lie
+        // nearly on a straight line, the GN loss has no lower bound and R
+        // can slide to ~1e5 cm or worse. Clamp at 20 m (the chamber is 26 cm
+        // long, so anything beyond ~5 m of curvature is indistinguishable
+        // from a straight line at hit precision). Without this, ~1% of
+        // events report unphysical radii and the UKF inherits the garbage.
+        constexpr double R_MAX_CM = 2000.0;
+        if (R > R_MAX_CM) { R = R_MAX_CM; break; }
         if (std::abs(dxc) + std::abs(dyc) + std::abs(dRc) < 1e-6) break;
     }
     if (!(R > 0) || !std::isfinite(R))
