@@ -100,6 +100,19 @@ std::unique_ptr<R3BGTPCFittedTrackData> R3BGTPCFitterUKF::FitTrack(R3BGTPCTrackD
         return nullptr;
     }
 
+    // Seed-quality cut: with the tight 0.02 momentum prior, the UKF locks
+    // to the seed. Seeds near the Pratt+GN R cap (20 m) carry no curvature
+    // information and produce wildly wrong p; better to reject them here
+    // than let them poison the σ_p/p histogram. Cf. plots/probe_400.png.
+    const double R_seed_cm = track->GetGeoRadius();
+    if (fMaxSeedRadius_cm > 0 && std::isfinite(R_seed_cm) && R_seed_cm > fMaxSeedRadius_cm)
+    {
+        LOG(info) << "R3BGTPCFitterUKF: skipping track " << track->GetTrackId()
+                  << " — seed R_fit = " << R_seed_cm << " cm > " << fMaxSeedRadius_cm
+                  << " cm (degenerate, near GN R cap)";
+        return nullptr;
+    }
+
     // -- 1. Seed momentum + initial pose from first two clusters. All
     //       positions are scaled to mm via fInputUnit_mm so the UKF runs in
     //       the same unit system as ATTPCROOT (where AtPropagator was

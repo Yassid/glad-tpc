@@ -66,6 +66,7 @@ class R3BGTPCTrack2Fit : public FairTask
     void SetMeasurementSigma(double sigma_mm) { fMeasSigma_mm = sigma_mm; }
     void SetMomentumSigmaFrac(double frac) { fMomSigmaFrac = frac; }
     void SetMinClusters(int n) { fMinClusters = n; }
+    void SetMaxSeedRadius_cm(double r) { fMaxSeedRadius_cm = r; }
     void SetEnableEnergyStraggling(bool on) { fEnableEnStraggling = on; }
     void SetELossScaleFactor(double f) { fELossScaleFactor = f; }
     void SetInputUnit_mm(double f) { fInputUnit_mm = f; }
@@ -102,6 +103,10 @@ class R3BGTPCTrack2Fit : public FairTask
     // the actual seed quality and collapses the tail to ~6 %.
     double fMomSigmaFrac{ 0.02 };
     int fMinClusters{ 5 };
+    // Reject seeds with R > this value (cm); they're near the Pratt+GN 20 m
+    // cap and carry no curvature information. With the tight momentum prior,
+    // letting them through means the UKF locks to a wildly-wrong p.
+    double fMaxSeedRadius_cm{ 500.0 };
     bool fEnableEnStraggling{ true };
     double fELossScaleFactor{ 1.0 };
     double fInputUnit_mm{ 10.0 };

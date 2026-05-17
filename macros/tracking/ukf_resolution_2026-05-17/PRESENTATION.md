@@ -332,7 +332,7 @@ With STEMAX=0.1 cm in P10 + tightened UKF prior `fMomSigmaFrac = 0.02` (producti
 | 1000 | 486 | 2.2 % | 2.2 % | **2.3 %** | +0.0 % | +0.1 % |
 | 1200 | 493 | 2.1 % | 2.1 % | **2.1 %** | +0.1 % | +0.1 % |
 
-¹ At 400 MeV/c the chamber is at the acceptance edge — short chords and many marginal seeds. The 0.02 prior anchors the UKF to a now-marginal seed and the residual distribution becomes broad. Considered an acceptable trade-off for the plateau gains.
+¹ At 400 MeV/c the chamber is at the box-gen acceptance edge — short chords (5–7 cm) and many marginal seeds. Out of 500 generated events, only ~35 reach the UKF; the underlying residual RMS on those is 12 %, but the analyze macro's Gauss-core fit on [−0.5, 0.5] is unstable at this N. A seed-quality cut (`R3BGTPCFitterUKF::SetMaxSeedRadius_cm`, default 500 cm) rejects events with R_fit near the Pratt+GN 20 m cap (~6 events at 400 MeV/c) — those carry no curvature information and would otherwise lock the tight-prior UKF onto wildly-wrong p. See `plots/probe_400.png`.
 
 Historical no-STEMAX + 0.10 prior numbers preserved in `scan_p_results_nostemax.csv` (compare `plots/sigma_vs_p_stemax_compare.png`).
 
@@ -424,6 +424,7 @@ Despite the dramatic core/tail improvement, the **seed is already publication-qu
 | `sigma_vs_p_stemax_compare.png` | Box-gen σ_p/p sweep with vs without STEMAX=0.1 — shows the bias-drift collapse. |
 | `evtdisp_mc_only_dense.png` | MC-only event display with STEMAX=0.1 — continuous truth arcs instead of 3–6 sparse stars. |
 | `ukf_tail_probe.png` | UKF residual structure: bimodality at the 0.10 default vs collapse at 0.02; tail-vs-core breakdown by p_MC, chord, N_smoothed, N_hits. |
+| `probe_400.png` | 400 MeV/c seed-quality diagnostic: shows the bad-seed population (R_fit hitting 20 m cap or wildly off) at the box-gen acceptance edge. Motivates the `SetMaxSeedRadius_cm` cut. |
 
 ---
 
@@ -451,7 +452,7 @@ root -b -q -l 'macros/plot_chord.C'
 
 ## 9. Open items / next iterations
 
-1. **UKF p_T at 400 MeV/c regresses** to 42 % under the tight 0.02 prior (acceptance edge with marginal seeds). A dynamic prior — relax to 0.05–0.10 when seed quality flags indicate it — would recover those events without sacrificing the plateau.
+1. **400 MeV/c is the acceptance edge** for the box-gen aim. Only ~35 events out of 500 reach UKF convergence; underlying residual RMS is 12 % on those, but the Gauss-core fit returns 42 % at this N. A seed-quality cut (`SetMaxSeedRadius_cm`, default 500 cm) rejects pathological R-cap seeds. A dynamic prior — relax `fMomSigmaFrac` to 0.05–0.10 when seed R deviates strongly from the expected Brho — would recover the bulk of borderline events without sacrificing the 500+ MeV/c plateau. Not implemented; needs per-event seed-quality flag through the pipeline.
 2. **The previously-reported "−42 % UKF p_T bias"** was an analysis bug in `measure_ukf.C` (used `|p|·sin(theta)` which is transverse to ẑ, not to ŷ where B sits). With the corrected `|p|·√(1 − sin²θ·sin²φ)` formula, p_T and p_total agree as they should for transverse-to-B tracks. Resolution discussion of UKF p_T can be retired.
 3. **Straight-line degeneracy (~1 % of events)**: now clamped at R = 20 m so the seed stays finite, but the events themselves are still labeled. Proper handling needs a χ² cut on the GN fit or a separate "low-curvature" flag.
 4. **Real-data vertex source**: the production wiring opens a sidecar `sim_*.root` and reads MC truth. Replacement for real data: external beam tracker giving (x_v ≈ −6.9 cm by geometry, z_v per-event from beam profile).

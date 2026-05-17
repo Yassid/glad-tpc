@@ -49,6 +49,13 @@ class R3BGTPCFitterUKF
     void SetMeasurementSigma(double sigma_mm) { fMeasSigma_mm = sigma_mm; }
     void SetMomentumSigmaFrac(double frac) { fMomSigmaFrac = frac; }
     void SetMinClusters(int n) { fMinClusters = n; }
+    /// Maximum seed circle radius (cm) accepted by the UKF. The Pratt+GN
+    /// fit clamps R at 20 m to avoid straight-line catastrophes, but seeds
+    /// near the cap have no real curvature information — feeding them to a
+    /// tight-prior UKF lock the fit to a wildly-wrong p. Default 500 cm
+    /// covers all physical pion radii (R = 67 cm at 400 MeV/c, 200 cm at
+    /// 1.2 GeV/c). Set <= 0 to disable.
+    void SetMaxSeedRadius_cm(double r) { fMaxSeedRadius_cm = r; }
     void SetEnableEnergyStraggling(bool enable) { fEnableEnStraggling = enable; }
     void SetELossScaleFactor(double f) { fELossScaleFactor = f; }
 
@@ -104,6 +111,7 @@ class R3BGTPCFitterUKF
     bool fEnableEnStraggling{ true };
     double fELossScaleFactor{ 1.0 };
     int fMinClusters{ 5 };
+    double fMaxSeedRadius_cm{ 500.0 };
     double fAlpha{ 1e-3 };
     double fBeta{ 2.0 };
     double fKappa{ 0.0 };

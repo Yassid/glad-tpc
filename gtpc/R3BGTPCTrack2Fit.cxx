@@ -47,6 +47,7 @@ void R3BGTPCTrack2Fit::SetParContainers()
     fFitter->SetMeasurementSigma(fMeasSigma_mm);
     fFitter->SetMomentumSigmaFrac(fMomSigmaFrac);
     fFitter->SetMinClusters(fMinClusters);
+    fFitter->SetMaxSeedRadius_cm(fMaxSeedRadius_cm);
     fFitter->SetEnableEnergyStraggling(fEnableEnStraggling);
     fFitter->SetELossScaleFactor(fELossScaleFactor);
     fFitter->SetInputUnit_mm(fInputUnit_mm);
