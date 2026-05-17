@@ -8,13 +8,13 @@
 //
 // Usage:
 //   root -b -q 'analyze_scan_point.C(800)'      → prints CSV line, returns
-void analyze_scan_point(int p_mev = 800)
+void analyze_scan_point(int p_mev = 800, const char* tag = "")
 {
     gSystem->Load("libR3BData");
     gSystem->Load("libR3BGTPCData");
     gStyle->SetOptStat(0);
     TString wd = gSystem->Getenv("VMCWORKDIR");
-    TString suf = Form("_p%d", p_mev);
+    TString suf = TString(tag) + Form("_p%d", p_mev);
     TFile fS(wd + "/glad-tpc/macros/sim/Prototype/sim" + suf + ".root");
     TFile fT("output_tracking" + suf + ".root");
     TFile fU("output_ukf" + suf + ".root");

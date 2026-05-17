@@ -24,6 +24,11 @@ require_file() {
 
 TAG=goodevt2k
 NEVT=2000
+# Production default: limit Geant4 step in P10 to 1 mm so the Langevin
+# digitizer sees the true curve, not long chord segments between sparse MC
+# points. Removes the +2 % σ_p/p bias drift seen with the no-limit setup
+# (see scan_p_results_nostemax.csv vs scan_p_results.csv). Slows sim ~3×.
+export GTPC_STEMAX_CM=${GTPC_STEMAX_CM:-0.1}
 HERE=$(cd "$(dirname "$0")" && pwd)
 TRACKDIR="$VMCWORKDIR/glad-tpc/macros/tracking"
 PLOTS="$HERE/plots"

@@ -34,6 +34,7 @@
 #include "TVirtualMCStack.h"
 
 #include "TGeoMedium.h"
+#include "TSystem.h"
 
 using std::cerr;
 using std::cout;
@@ -122,6 +123,8 @@ void R3BGTPC::SetSpecialPhysicsCuts()
             gMC->Gstpar(pmix->GetId(), "DCUTE", cutE);  /** delta-rays by electrons (GeV)*/
             gMC->Gstpar(pmix->GetId(), "DCUTM", cutE);  /** delta-rays by muons (GeV)*/
             gMC->Gstpar(pmix->GetId(), "PPCUTM", -1.);  /** direct pair production by muons (GeV)*/
+            // Note: Gstpar(STEMAX) is not implemented in geant4_vmc.
+            // We use gMC->SetMaxStep() inside ProcessHits() instead (see below).
         }
     } //! gGeoManager
 }
@@ -129,6 +132,17 @@ void R3BGTPC::SetSpecialPhysicsCuts()
 // -----   Public method ProcessHits  --------------------------------------
 Bool_t R3BGTPC::ProcessHits(FairVolume* vol)
 {
+    // Optional per-track max step on entry to the active volume. The
+    // stepLimiter physics constructor (g4Config.C) translates this into
+    // G4UserLimits, producing a dense MC trajectory for diagnostic plots.
+    // Disabled by default to keep production sims fast and reproducible.
+    if (gMC->IsTrackEntering()) {
+        if (const char* s = gSystem->Getenv("GTPC_STEMAX_CM")) {
+            double stemax = std::atof(s);
+            if (stemax > 0) gMC->SetMaxStep(stemax);
+        }
+    }
+
     TLorentzVector pos;
     TLorentzVector mom;
     gMC->TrackPosition(pos);
