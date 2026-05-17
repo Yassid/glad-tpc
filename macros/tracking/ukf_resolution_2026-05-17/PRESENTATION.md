@@ -372,7 +372,7 @@ Historical no-STEMAX + 0.10 prior numbers preserved in `scan_p_results_nostemax.
 
 ### 6.4 Key headline
 
-Canonical good_evt 2k benchmark, chord ≥ 16 cm (N = 226), with STEMAX=0.1 cm + `fMomSigmaFrac = 0.02` (both production defaults):
+Canonical good_evt 2k benchmark, chord ≥ 16 cm (N = 222), with STEMAX=0.1 cm + `fMomSigmaFrac = 0.02` + `fMinClusters = 3` (all production defaults):
 
 * **σ_R/R = 1.7 % (seed, bias −0.6 %)** — from Pratt+GN with vertex pseudo-hit
 * **σ_p/p = 1.8 % (seed, bias −0.7 %)** — seed via GeoTheta from y-vs-φ slope
@@ -403,9 +403,36 @@ Sweep of `MOM_SIGMA_FRAC` on the existing tracking output:
 | **0.02 (new)** | **94 %**      | **6 %**       | **0.41** |
 | 0.01           | 95 %          | 5 %           | —       |
 
-0.02 matches the actual seed quality; below that, diminishing returns. New default in `R3BGTPCTrack2Fit`. Trade-off: at 400 MeV/c (acceptance edge), the tight prior anchors the UKF to a now-marginal seed and σ regresses to 42 % — acceptable given the plateau improvements (σ_p UKF ≈ σ_p seed across 500–1200 MeV/c). Diagnostic plot at `plots/ukf_tail_probe.png`.
+0.02 matches the actual seed quality; below that, diminishing returns. New default in `R3BGTPCTrack2Fit`. Initial trade-off at 400 MeV/c — σ regressed to 42 % under the tight prior because the chamber-edge regime was retaining few events — was subsequently resolved by lowering `fMinClusters` from 5 to 3 (Section 6.7): the 400 MeV/c bin recovers to σ = 3.8 %, so the σ ≤ 4 % target is now met across the full 400–1200 MeV/c range. Diagnostic plot at `plots/ukf_tail_probe.png`.
 
 Despite the dramatic core/tail improvement, the **seed is already publication-quality** on essentially all events (median \|residual\| 2.1 %). The UKF's value remains the back-extrapolation through gas, not curvature refinement. For physics quoting σ_p/p, prefer seed (`R_fit + GeoTheta` from `R3BGTPCTrackData`) over UKF p_total.
+
+### 6.7 UKF cluster minimum
+
+After the prior tightening, a stage-by-stage acceptance audit on the box-gen sweep revealed that the 400–600 MeV/c "UKF acceptance gap" was a `TripletClust` issue, not a UKF or seed problem. With the AT-TPC-inherited `fMinClusters = 5`:
+
+| p (MeV/c) | seed→UKF % | min<5 rejected | R>500 rejected | UKF-proper |
+|----------:|-----------:|---------------:|---------------:|-----------:|
+| 400 |   9 % | 315 (98 %) |  6 | 0 |
+| 500 |  48 % | 219 (95 %) | 12 | 0 |
+| 600 |  75 % |  92 (81 %) | 21 | 0 |
+| 700 |  90 % |  15        | 30 | 0 |
+| 800 |  97 % |   2        | 11 | 0 |
+
+UKF non-convergence proper is **zero** at all momenta — the propagator never diverges. The rejections all happen at the pre-UKF cluster gate. At 400 MeV/c the median chord of rejected events is 3.5 cm (vs 6.1 cm for converged events); short tracks split into only 3–4 clusters under `TripletClust`'s default window.
+
+Lowering `fMinClusters` to 3 admits these events:
+
+| p (MeV/c) | σ_p UKF MIN=5 | σ_p UKF MIN=3 |
+|----------:|--------------:|--------------:|
+| 400  | 42.0 %  | **3.8 %** |
+| 500  | 2.4 %   | 2.8 %    |
+| 600  | 2.2 %   | 2.5 %    |
+| 700  | 2.3 %   | 2.3 %    |
+| 800  | 2.3 %   | 2.3 %    |
+| 900+ | unchanged                |
+
+The trade-off is heavily favorable: 38 pp σ recovery at 400 MeV/c at a cost of +0.2–0.4 pp at 500–600 MeV/c; 700+ MeV/c is identical because 5-cluster events dominate the Gaussian core anyway. On good_evt 2k: total UKF-converged events 1029 → 1117 (+88, +8.5 %); long-chord σ unchanged at 2.9 %; core fraction 94 % → 96 %. Defaults flipped in both `R3BGTPCFitterUKF` and `R3BGTPCTrack2Fit`; override via `MIN_CLUSTERS` env. Diagnostics: `plots/accept_400.png`, `plots/residual_overlay_p.png`, `plots/probe_400.png`.
 
 ---
 
