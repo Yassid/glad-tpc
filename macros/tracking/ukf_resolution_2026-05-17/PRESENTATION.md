@@ -425,6 +425,8 @@ Despite the dramatic core/tail improvement, the **seed is already publication-qu
 | `evtdisp_mc_only_dense.png` | MC-only event display with STEMAX=0.1 — continuous truth arcs instead of 3–6 sparse stars. |
 | `ukf_tail_probe.png` | UKF residual structure: bimodality at the 0.10 default vs collapse at 0.02; tail-vs-core breakdown by p_MC, chord, N_smoothed, N_hits. |
 | `probe_400.png` | 400 MeV/c seed-quality diagnostic: shows the bad-seed population (R_fit hitting 20 m cap or wildly off) at the box-gen acceptance edge. Motivates the `SetMaxSeedRadius_cm` cut. |
+| `accept_400.png` | Three-panel acceptance edge story: pipeline survival fraction (reco/seed/UKF) vs p_MC — 400 MeV/c collapses to 6 % UKF acceptance; chord distribution per momentum — 400 MeV/c chord peaks at 2–5 cm vs the 16 cm "long" cut; R_seed distribution per momentum — only 400 MeV/c piles up at the 20 m Pratt+GN cap. |
+| `residual_overlay_p.png` | UKF residual histograms overlaid for 400/600/800/1000/1200 MeV/c (log y). 400 MeV/c has only ~30 events in the central peak and a long tail; 600+ MeV/c are clean. |
 
 ---
 
