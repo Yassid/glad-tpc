@@ -48,7 +48,9 @@ void run_ukf(TString fileName = "output_tracking.root", TString outName = "outpu
         fitTask->SetMomentumSeed(p_seed);
         std::cout << "[run_ukf] Using seed override p = " << p_seed << " MeV/c\n";
     }
-    fitTask->SetMinClusters(5);
+    // Override the R3BGTPCTrack2Fit default (3) only when MIN_CLUSTERS is set.
+    if (const char* e = gSystem->Getenv("MIN_CLUSTERS"); e && std::atoi(e) > 0)
+        fitTask->SetMinClusters(std::atoi(e));
     fitTask->SetEnableEnergyStraggling(true);
 
     fRun->AddTask(fitTask);

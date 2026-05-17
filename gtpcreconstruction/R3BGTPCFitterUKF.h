@@ -110,7 +110,12 @@ class R3BGTPCFitterUKF
     double fMomSigmaFrac{ 0.1 };     ///< matches AtFitterUKF default
     bool fEnableEnStraggling{ true };
     double fELossScaleFactor{ 1.0 };
-    int fMinClusters{ 5 };
+    // Minimum input clusters to attempt UKF. At 5 the chamber's short-chord
+    // tracks (400-600 MeV/c, chord 4-7 cm) are silently rejected because
+    // TripletClust forms <5 clusters. Lowering to 3 recovers σ_p/p UKF at
+    // 400 MeV/c from 42 % (small-N Gauss artefact) to 3.8 % at a cost of
+    // +0.2-0.4 pp at 500-600 MeV/c.
+    int fMinClusters{ 3 };
     double fMaxSeedRadius_cm{ 500.0 };
     double fAlpha{ 1e-3 };
     double fBeta{ 2.0 };

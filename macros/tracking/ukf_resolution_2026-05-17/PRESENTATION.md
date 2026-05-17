@@ -9,18 +9,20 @@ R3B GLAD-TPC, port of OpenKF from ATTPCROOT, target σ_p/p ≤ 4 %.
 ATTPCROOT achieves σ_p/p ≈ 4 % on HYDRA-class TPCs. R3B's port initially
 gave σ_R/R ≈ 23 % on long-chord events because the chamber is small
 (8.8 × 25.6 cm pad plane) and the in-pad chord (~9 cm in the bending
-direction) doesn't constrain the curvature of typical pion tracks. Five
+direction) doesn't constrain the curvature of typical pion tracks. Six
 pipeline changes — a vertex pseudo-hit in the Pratt+GN seed fit, a
 helix-tangent UKF seed direction, a Huber loss on the GN residuals, a
 1 mm Geant4 step limit in the P10 active gas (so the Langevin digitizer
-lays drift electrons along the true curve), and a UKF initial momentum
-prior tightened from 0.10 to 0.02 (matched to the actual seed quality
-σ_R/R = 1.7 %, collapses the previously-bimodal UKF residual tail) —
-brought σ_p/p down to **1.7 % at seed level, 2.9 % at UKF level** on
-the good_evt 2k benchmark with the UKF tail fraction collapsed from
-44 % to 6 %, the σ ≤ 4 % benchmark met across 500–1200 MeV/c, and the
-previous +2 % bias drift across momentum removed. The seed alone
-already gives publication-quality momentum (median |residual| 2.1 %).
+lays drift electrons along the true curve), a UKF initial momentum
+prior tightened from 0.10 to 0.02 (matched to the seed σ_R/R = 1.7 %,
+collapses the previously-bimodal UKF residual tail), and the UKF
+min-cluster threshold lowered from 5 to 3 (recovers short-chord
+acceptance at the box-gen low-p edge) — brought σ_p/p down to
+**1.7 % at seed level, 2.9 % at UKF level** on the good_evt 2k benchmark
+with the UKF tail fraction collapsed from 44 % to 4 %, **the σ ≤ 4 %
+benchmark met across 400–1200 MeV/c**, and the previous +2 % bias drift
+across momentum removed. The seed alone already gives publication-quality
+momentum (median |residual| 2.1 %).
 
 ---
 
@@ -319,20 +321,20 @@ noisy $c_1 - c_0$ direction estimate the UKF used to take.
 
 ### 6.1 Box-gen sweep (single-π⁻, 3° cone aimed at chamber centre, 500 events/point)
 
-With STEMAX=0.1 cm in P10 + tightened UKF prior `fMomSigmaFrac = 0.02` (production defaults):
+With STEMAX=0.1 cm in P10 + UKF prior `fMomSigmaFrac = 0.02` + `fMinClusters = 3` (production defaults):
 
 | p (MeV/c) | N | σ_R seed | σ_p seed | σ_p UKF | bias R | bias p_UKF |
 |----------:|--:|---------:|---------:|--------:|-------:|-----------:|
-| 400  | 353 | 4.8 % | 4.7 % | **42.0 %**¹| −0.3 % | −0.2 % |
-| 500  | 446 | 2.8 % | 2.8 % | **2.4 %** | −0.2 % | +0.1 % |
-| 600  | 455 | 2.4 % | 2.4 % | **2.2 %** | +0.2 % | +0.0 % |
+| 400  | 353 | 4.8 % | 4.7 % | **3.8 %**¹| −0.3 % | −0.4 % |
+| 500  | 446 | 2.8 % | 2.8 % | **2.8 %** | −0.2 % | −0.1 % |
+| 600  | 455 | 2.4 % | 2.4 % | **2.5 %** | +0.2 % | +0.2 % |
 | 700  | 453 | 2.3 % | 2.3 % | **2.3 %** | −0.3 % | −0.3 % |
 | 800  | 475 | 2.3 % | 2.3 % | **2.3 %** | +0.0 % | +0.0 % |
 | 900  | 481 | 2.2 % | 2.2 % | **2.2 %** | −0.1 % | −0.1 % |
 | 1000 | 486 | 2.2 % | 2.2 % | **2.3 %** | +0.0 % | +0.1 % |
 | 1200 | 493 | 2.1 % | 2.1 % | **2.1 %** | +0.1 % | +0.1 % |
 
-¹ At 400 MeV/c the chamber is at the box-gen acceptance edge — short chords (5–7 cm) and many marginal seeds. Out of 500 generated events, only ~35 reach the UKF; the underlying residual RMS on those is 12 %, but the analyze macro's Gauss-core fit on [−0.5, 0.5] is unstable at this N. A seed-quality cut (`R3BGTPCFitterUKF::SetMaxSeedRadius_cm`, default 500 cm) rejects events with R_fit near the Pratt+GN 20 m cap (~6 events at 400 MeV/c) — those carry no curvature information and would otherwise lock the tight-prior UKF onto wildly-wrong p. See `plots/probe_400.png`.
+¹ At 400 MeV/c the chamber is at the box-gen acceptance edge — short chords (5–7 cm). Lowering `fMinClusters` from 5 → 3 recovers the bin by admitting the short-chord events that `TripletClust` can only split into 3–4 clusters. Pre-flip σ was 42 % (small-N Gauss artefact on ~35 surviving events); post-flip σ is 3.8 % on the recovered 353 events. The min-cluster threshold was rejecting 80–98 % of seeds at 400–500 MeV/c (see `plots/accept_400.png`). A second quality cut (`R3BGTPCFitterUKF::SetMaxSeedRadius_cm = 500`) rejects events with R_fit near the Pratt+GN 20 m cap — those carry no curvature information.
 
 Historical no-STEMAX + 0.10 prior numbers preserved in `scan_p_results_nostemax.csv` (compare `plots/sigma_vs_p_stemax_compare.png`).
 
@@ -375,8 +377,8 @@ Canonical good_evt 2k benchmark, chord ≥ 16 cm (N = 226), with STEMAX=0.1 cm +
 * **σ_R/R = 1.7 % (seed, bias −0.6 %)** — from Pratt+GN with vertex pseudo-hit
 * **σ_p/p = 1.8 % (seed, bias −0.7 %)** — seed via GeoTheta from y-vs-φ slope
 * **σ_p/p = 2.9 % (UKF, bias −3.0 %)** — Gauss core now describes 94 % of long-chord events (was 56 % before tightening prior)
-* **UKF tail collapsed**: mean \|p_UKF/p_MC − 1\| dropped from **26 %** (default 0.10 prior) to **3.6 %** (0.02 prior). Median p_UKF/p_MC went 0.66 → 1.04.
-* **σ ≤ 4 % across 500–1200 MeV/c** at both seed and UKF level (box-gen sweep); 400 MeV/c is the acceptance edge.
+* **UKF tail collapsed**: mean \|p_UKF/p_MC − 1\| dropped from **26 %** (default 0.10 prior) to **3.8 %** (0.02 prior + 3-cluster minimum). Median p_UKF/p_MC moved 0.66 → 0.98. Core fraction 56 % → 96 %.
+* **σ ≤ 4 % across 400–1200 MeV/c** at both seed and UKF level (box-gen sweep). Lowering `fMinClusters` to 3 recovered the 400 MeV/c bin from σ 42 % to 3.8 %.
 * **Bias drift across momentum removed** — previously +0.3 → +1.9 % across 400–1200 MeV/c; now flat at ±0.3 % per point (see `plots/sigma_vs_p_stemax_compare.png`).
 * **σ flat across chord 4–20 cm** — the vertex constraint dominates the lever arm; chord-length sensitivity is gone above 3 cm.
 * ATTPCROOT 4 % benchmark: **met**, with UKF σ ≈ seed σ (UKF no longer degrades the seed).
@@ -454,7 +456,7 @@ root -b -q -l 'macros/plot_chord.C'
 
 ## 9. Open items / next iterations
 
-1. **400 MeV/c is the acceptance edge** for the box-gen aim. Only ~35 events out of 500 reach UKF convergence; underlying residual RMS is 12 % on those, but the Gauss-core fit returns 42 % at this N. A seed-quality cut (`SetMaxSeedRadius_cm`, default 500 cm) rejects pathological R-cap seeds. A dynamic prior — relax `fMomSigmaFrac` to 0.05–0.10 when seed R deviates strongly from the expected Brho — would recover the bulk of borderline events without sacrificing the 500+ MeV/c plateau. Not implemented; needs per-event seed-quality flag through the pipeline.
+1. **Low-p box-gen acceptance** is dominated by `TripletClust` cluster count rather than UKF physics — at 400 MeV/c the chord is short and `TripletClust` produces only 3–4 clusters per track. Lowering `fMinClusters` from 5 to 3 (current default) recovered σ_p UKF from 42 % to 3.8 % at 400 MeV/c. Further gains would require either a 2-cluster fitter (probably too sparse to constrain curvature) or revisiting TripletClust thresholds to merge fewer hits per cluster.
 2. **The previously-reported "−42 % UKF p_T bias"** was an analysis bug in `measure_ukf.C` (used `|p|·sin(theta)` which is transverse to ẑ, not to ŷ where B sits). With the corrected `|p|·√(1 − sin²θ·sin²φ)` formula, p_T and p_total agree as they should for transverse-to-B tracks. Resolution discussion of UKF p_T can be retired.
 3. **Straight-line degeneracy (~1 % of events)**: now clamped at R = 20 m so the seed stays finite, but the events themselves are still labeled. Proper handling needs a χ² cut on the GN fit or a separate "low-curvature" flag.
 4. **Real-data vertex source**: the production wiring opens a sidecar `sim_*.root` and reads MC truth. Replacement for real data: external beam tracker giving (x_v ≈ −6.9 cm by geometry, z_v per-event from beam profile).

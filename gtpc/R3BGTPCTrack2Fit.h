@@ -102,7 +102,10 @@ class R3BGTPCTrack2Fit : public FairTask
     // of long-chord events, producing a wide non-Gaussian tail. 0.02 matches
     // the actual seed quality and collapses the tail to ~6 %.
     double fMomSigmaFrac{ 0.02 };
-    int fMinClusters{ 5 };
+    // 3 covers the small-chord box-gen acceptance edge at 400-600 MeV/c
+    // (sigma_p UKF 42 % -> 3.8 % at 400). See R3BGTPCFitterUKF.h for the
+    // full justification. Override via MIN_CLUSTERS env in run_ukf.C.
+    int fMinClusters{ 3 };
     // Reject seeds with R > this value (cm); they're near the Pratt+GN 20 m
     // cap and carry no curvature information. With the tight momentum prior,
     // letting them through means the UKF locks to a wildly-wrong p.
