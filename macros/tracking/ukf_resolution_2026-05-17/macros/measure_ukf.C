@@ -59,7 +59,13 @@ void measure_ukf(TString ukfFile = "output_ukf_goodevt.root",
         double pMC = std::sqrt(pi->GetPx()*pi->GetPx() + pi->GetPy()*pi->GetPy() + pi->GetPz()*pi->GetPz()) * 1000;
         double pTMC = std::sqrt(pi->GetPx()*pi->GetPx() + pi->GetPz()*pi->GetPz()) * 1000;
         double pFit  = p_from_KE(kin.kineticEnergy);
-        double pTFit = pFit * std::sin(kin.theta);
+        // kin.theta and kin.phi are ROOT spherical (theta from z-axis, phi
+        // in xy-plane), inherited from XYZVector::Theta()/Phi() in the
+        // UKF state. R3B B-field is along y, so pT must be transverse to y:
+        // pT = sqrt(px^2 + pz^2) = |p| * sqrt(1 - sin^2(theta)*sin^2(phi)).
+        const double sTh = std::sin(kin.theta);
+        const double sPhi = std::sin(kin.phi);
+        double pTFit = pFit * std::sqrt(std::max(0.0, 1.0 - sTh*sTh*sPhi*sPhi));
         if (pMC <= 0) continue;
         // Print first 5 entries in both metrics for diagnosis
         static int dumped = 0;
