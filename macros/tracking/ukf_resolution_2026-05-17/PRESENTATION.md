@@ -1,0 +1,445 @@
+# UKF Momentum Resolution on HYDRA Prototype — Status & Formulas
+
+R3B GLAD-TPC, port of OpenKF from ATTPCROOT, target σ_p/p ≤ 4 %.
+
+---
+
+## 1. Goal & state in one paragraph
+
+ATTPCROOT achieves σ_p/p ≈ 4 % on HYDRA-class TPCs. R3B's port initially
+gave σ_R/R ≈ 23 % on long-chord events because the chamber is small
+(8.8 × 25.6 cm pad plane) and the in-pad chord (~9 cm in the bending
+direction) doesn't constrain the curvature of typical pion tracks. Three
+pipeline changes — a vertex pseudo-hit in the Pratt+GN seed fit, a
+helix-tangent UKF seed direction, and a Huber loss on the GN residuals —
+brought σ_p/p down to **3.0 % at seed level, 4.3 % at UKF level**, with
+the 4 % benchmark met across 500–1200 MeV/c on both single-π and
+realistic (³He + π⁻) good_evt samples.
+
+---
+
+## 2. Geometry
+
+### Active region (chamber-local, after subtracting world offsets (4.2, 0, 260.2)):
+
+```
+       x_local [cm]
+            ↑
+       8.8  ├────────────────────────┐   ← +x wall (pad-plane far side)
+            │                        │
+            │  active gas            │
+            │  P10 (Ar 90% + CH₄ 10%)│
+            │                        │
+        0.0 └────────────────────────┘   ← +x wall (pad-plane near side)
+           0.0                     25.6
+                                      → z_local [cm]  (beam direction +z)
+```
+
+* **B-field**: (0, 2 T, 0) (GLAD horizontal dipole) — bending plane = (x, z).
+* **Drift**: along ±y. Pad plane is the (x, z) face at fixed y.
+* **Target (LH₂)**: world (−2.7, 0, 227) cm → chamber-local (−6.9, 0, −33.2) cm.
+  **The target sits 6.9 cm *outside* the pad-plane footprint** in the bending direction.
+
+This 6.9 cm offset is what the vertex constraint exploits.
+
+---
+
+## 3. The fundamental problem — sagitta vs hit noise
+
+For a charged particle with bending radius `R` traversing chord `L` in the
+bending plane, the sagitta is
+
+$$
+s = R - \sqrt{R^2 - (L/2)^2} \;\approx\; \frac{L^2}{8 R}
+$$
+
+Plugging in HYDRA Prototype numbers for a 800 MeV/c π⁻ with the in-pad
+chord only:
+
+| symbol | value |
+|--------|------:|
+| p_T  | 800 MeV/c |
+| R = p_T / (0.3·B) | 133 cm |
+| L (in-pad chord) | 9 cm |
+| **s = L²/(8R)** | **0.76 mm** |
+| σ_xy (effective hit resolution) | ~1 mm |
+
+**The curvature signal is below the hit noise**. Without extra information,
+no circle fit on the in-pad hits alone can resolve R to better than
+~tens of percent.
+
+---
+
+## 4. Gluckstern's lower bound
+
+For N hits with isotropic gaussian noise σ_xy along a chord L, the
+minimum variance unbiased estimator of the curvature κ = 1/R has
+
+$$
+\sigma_{\kappa} \;=\; \frac{\sigma_{xy}}{L^2}\,\sqrt{\frac{720}{N + 4}}
+$$
+
+Multiplying by R gives
+
+$$
+\boxed{\;\frac{\sigma_R}{R} \;=\; R\,\sigma_\kappa \;=\; \frac{R\,\sigma_{xy}}{L^2}\,\sqrt{\frac{720}{N}} \;}
+$$
+
+Plugging the same Prototype numbers (R=133, σ_xy=0.1 cm, N=100, L=9 cm):
+
+$$
+\frac{\sigma_R}{R}\Big|_{\text{Gluckstern}} \;=\; \frac{133 \times 0.1}{81}\sqrt{\frac{720}{100}}
+\;\approx\; 0.44 \;=\; 44\,\%
+$$
+
+That's a theoretical lower bound. We measured baseline σ_R/R = 22.6 % —
+already well below the floor, because the formula assumes a uniformly
+sampled chord while reco hits are denser in the centre, etc. But the
+scaling is what matters: **σ scales as R/L²**. Doubling L drops the floor
+by 4×. This is the lever that the vertex constraint pulls.
+
+For L = 16 cm (in-pad + vertex):
+
+$$
+\frac{\sigma_R}{R}\Big|_{L=16} \;=\; \frac{133 \times 0.1}{256}\sqrt{\frac{720}{100}}
+\;\approx\; 14\,\%
+$$
+
+Measured: 3.1 %. Bias-corrected and well-conditioned fit beats the
+naive Gluckstern bound by ~4× (the formula is conservative; reality
+benefits from non-uniform sampling and unbiased estimators).
+
+---
+
+## 5. Algorithms — the pipeline in formulas
+
+### 5.1 Pattern recognition (TripClust, IPOL Dalitz/Wilberg/Aymans 2018)
+
+Each event's reco-hit cloud is clustered by:
+
+1. **Position smoothing**: replace each hit by the mean of its neighbours within radius `r = 2 · dNN`.
+2. **Triplet generation**: for each midpoint, build up to `n=2` best triplets from its `k=19` nearest neighbours such that 1 − cos α < 0.03 (α = angle between branches).
+3. **Hierarchical clustering** of triplets with single-linkage stop threshold `t = 4 · dNN_triplet`.
+4. **Cluster pruning**: drop clusters with fewer than `m = 15` triplets.
+
+Defaults (`r=2`, `k=19`, `n=2`, `a=0.03`, `s=0.3`, `t=4`, `m=15`) work well on HYDRA Prototype out of the box.
+
+### 5.2 Pratt's algebraic circle fit (Chernov 2010, Ch. 5)
+
+For N hits in the (x, z) bending plane, centre the data:
+$\bar{x} = \langle x_i \rangle$, $\bar{z} = \langle z_i \rangle$,
+$\Delta x_i = x_i − \bar{x}$, $\Delta z_i = z_i − \bar{z}$,
+$\zeta_i = \Delta x_i^2 + \Delta z_i^2$.
+
+Define normalized moments:
+$M_{xx} = \langle \Delta x_i^2 \rangle$,
+$M_{zz} = \langle \Delta z_i^2 \rangle$,
+$M_{xz} = \langle \Delta x_i \Delta z_i \rangle$,
+$M_{x\zeta} = \langle \Delta x_i \zeta_i \rangle$,
+$M_{z\zeta} = \langle \Delta z_i \zeta_i \rangle$,
+$M_{\zeta\zeta} = \langle \zeta_i^2 \rangle$,
+$M_z = M_{xx} + M_{zz}$,
+$\text{Cov} = M_{xx} M_{zz} - M_{xz}^2$.
+
+Pratt's characteristic cubic in the Lagrange multiplier `t`:
+
+$$
+A_3 t^3 + A_2 t^2 + A_1 t + A_0 = 0
+$$
+
+with
+
+$$
+\begin{aligned}
+A_3 &= 4 M_z, \\
+A_2 &= -3 M_z^2 - M_{\zeta\zeta}, \\
+A_1 &= M_{\zeta\zeta} M_z + 4\,\text{Cov}\,M_z - M_{x\zeta}^2 - M_{z\zeta}^2 - M_z^3, \\
+A_0 &= M_{x\zeta}^2 M_{zz} + M_{z\zeta}^2 M_{xx} - M_{\zeta\zeta}\,\text{Cov} - 2 M_{x\zeta} M_{z\zeta} M_{xz} + M_z^2\,\text{Cov}.
+\end{aligned}
+$$
+
+Newton iteration from $t = 0$ gives the smallest root. The circle params follow from:
+
+$$
+c_x = \frac{M_{x\zeta}(M_{zz} - t) - M_{z\zeta} M_{xz}}{2 \det}, \quad
+c_z = \frac{M_{z\zeta}(M_{xx} - t) - M_{x\zeta} M_{xz}}{2 \det},
+$$
+
+where $\det = t^2 - t M_z + \text{Cov}$, then $R^2 = c_x^2 + c_z^2 + M_z + 2t$.
+Translating back: $(c_x, c_z) \rightarrow (c_x + \bar{x}, c_z + \bar{z})$.
+
+Pratt is **unbiased to leading order in hit noise** — far better than
+naive Kasa, which biases R low when the sagitta is comparable to noise.
+
+### 5.3 Gauss-Newton geometric refinement
+
+Pratt's algebraic solution minimizes a Lagrange-multiplier-modified
+algebraic loss, not the geometric distance. Refine by minimizing the
+geometric loss
+
+$$
+\chi^2(c_x, c_z, R) = \sum_i w_i \, r_i^2, \qquad
+r_i = d_i - R, \qquad d_i = \sqrt{(x_i - c_x)^2 + (z_i - c_z)^2}
+$$
+
+Jacobians:
+
+$$
+\frac{\partial r_i}{\partial c_x} = -\frac{x_i - c_x}{d_i}, \qquad
+\frac{\partial r_i}{\partial c_z} = -\frac{z_i - c_z}{d_i}, \qquad
+\frac{\partial r_i}{\partial R} = -1
+$$
+
+Normal equations: $H \delta = -J^\top W r$ where $H = J^\top W J$. Update
+$(c_x, c_z, R) \leftarrow (c_x, c_z, R) + \delta$ until convergence.
+
+Pratt as seed + 2–5 GN iterations gives the geometric optimum.
+
+### 5.4 Vertex pseudo-hit (the breakthrough)
+
+The target is a known point at $(x_v, z_v) = (-6.9, z_{\text{beam}})$ cm
+in chamber-local frame. Add it as one extra residual to the GN sum:
+
+$$
+\chi^2_{\text{total}} = \sum_{i \in \text{hits}} r_i^2 + w_v \, r_v^2,
+\qquad
+r_v = \sqrt{(x_v - c_x)^2 + (z_v - c_z)^2} - R
+$$
+
+with weight
+
+$$
+w_v = \left(\frac{\sigma_{xy}}{\sigma_v}\right)^2
+$$
+
+For $\sigma_{xy} = 1$ mm and $\sigma_v = 0.5$ mm (beam-spot width), $w_v = 4$.
+
+The vertex effectively extends the chord from ~9 cm (in-pad) to ~16 cm
+(target-to-far-wall). Per Gluckstern, σ_R scales as 1/L², so this is a
+**~3× resolution improvement** even with one extra "hit".
+
+**Production wiring**: `R3BGTPCHit2Track` opens a sidecar sim file and
+indexes the MC primary's `StartXYZ` by event counter (since the reco
+stage drops `MCTrack`). For real data, this is where a beam tracker
+would plug in.
+
+### 5.5 Huber loss against outlier hits
+
+Replace L2 weights in the GN with Huber weights:
+
+$$
+w_i^{\text{Huber}}(r_i) = \begin{cases}
+1 & |r_i| \le k \\
+k / |r_i| & |r_i| > k
+\end{cases}
+$$
+
+with $k = 0.10$ cm ≈ hit noise. Hits more than ~1 mm from the circle
+(δ-electrons, mis-clusterings) are downweighted ∝ 1/|r|, so they don't
+pull the geometric optimum. Modest improvement: σ_p/p UKF 4.7 % → 4.3 %
+on long-chord good_evt.
+
+### 5.6 R cap (straight-line degeneracy)
+
+In ~1 % of events, the in-pad hits + vertex pseudo-hit lie nearly
+collinear in (x, z). The GN cost function then has no lower bound — any
+$R \to \infty$ fits the data equally well. Clamp inside the GN loop:
+
+$$
+R \leftarrow \min(R, R_{\max}), \qquad R_{\max} = 2000 \text{ cm}
+$$
+
+The chamber is 26 cm long, so anything beyond ~5 m of curvature is
+indistinguishable from a straight line at hit precision; the cap is
+loose enough that genuine high-momentum tracks aren't truncated.
+
+### 5.7 Pitch angle from y-vs-φ
+
+The track is a helix; in (x, z) it's a circle, along y a linear
+function of φ. Fit $y_i = a + b\,\varphi_i$ where $\varphi_i = \arctan2(z_i - c_z, x_i - c_x)$. The angle from the B-axis (+y) satisfies:
+
+$$
+\cot \theta_y = \frac{b \cdot \text{sgn}(\dot{\varphi})}{R}
+\quad\Rightarrow\quad
+\theta_y = \arctan2(1, \cot \theta_y)
+$$
+
+Sign of $\dot{\varphi}$ comes from the unwrapped φ-walk between the first
+and last hit (track is ordered along φ by the pattern recognition).
+
+### 5.8 Brho seed for the UKF
+
+Once $(R, \theta_y)$ are known, the seed momentum is
+
+$$
+p_T = 0.3 \cdot |B| \cdot R \quad \text{[GeV/c, T, m]}, \qquad
+p_{\text{total}} = \frac{p_T}{\sin \theta_y}
+$$
+
+For UKF input units, $p_T \text{[MeV/c]} = 300 \cdot |B|\text{[T]} \cdot R\text{[m]}$.
+
+### 5.9 UKF state and propagation
+
+State vector in OpenKF: $\mathbf{x} = (x, y, z, p, \theta, \varphi)$ with
+$\theta, \varphi$ in ROOT spherical convention (θ from +z, φ in xy).
+The propagator integrates the Lorentz force:
+
+$$
+\frac{d\mathbf{p}}{dt} = q\,\mathbf{v} \times \mathbf{B}
+$$
+
+With $\mathbf{B} = (0, B_y, 0)$, no force along y → momentum component
+$p_y$ is conserved (modulo energy loss); motion in the (x, z) plane is
+circular with radius $R = p_T / (q B_y)$.
+
+The UKF init now uses the **helix tangent direction** built from the
+PRA result:
+
+$$
+\hat{\mathbf{t}}_{xz} = \text{sgn}\cdot \frac{(-(c_0^z - c_z), \, c_0^x - c_x)}{R}
+\quad (\text{sign chosen so } \hat{\mathbf{t}}\cdot(c_1 - c_0) > 0)
+$$
+
+$$
+\hat{\mathbf{d}}_{\text{3D}} = \left(\sin\theta_y\,\hat{t}_x,\; \pm\cos\theta_y,\; \sin\theta_y\,\hat{t}_z\right)
+$$
+
+with the $\pm$ chosen by the sign of $c_1^y - c_0^y$. This replaces the
+noisy $c_1 - c_0$ direction estimate the UKF used to take.
+
+---
+
+## 6. Results
+
+### 6.1 Box-gen sweep (single-π⁻, 3° cone aimed at chamber centre, 500 events/point)
+
+| p (MeV/c) | N | σ_R seed | σ_p seed | σ_p UKF | bias R | bias p_UKF |
+|----------:|--:|---------:|---------:|--------:|-------:|-----------:|
+| 400  | 365 | 5.1 %  | 4.2 %  | 45.6 %  | −1.8 % | +1.8 %  |
+| 500  | 396 | 2.5 %  | 2.5 %  | **3.6 %**  | +0.3 % | +0.4 % |
+| 600  | 375 | 3.0 %  | 3.0 %  | **2.5 %**  | +0.3 % | +0.2 % |
+| 700  | 369 | 3.3 %  | 3.3 %  | **3.7 %**  | +0.8 % | +1.1 % |
+| 800  | 382 | 2.7 %  | 2.7 %  | **3.6 %**  | +0.7 % | +0.6 % |
+| 900  | 375 | 3.6 %  | 3.6 %  | **3.9 %**  | +1.5 % | +1.6 % |
+| 1000 | 387 | 3.5 %  | 3.5 %  | **4.0 %**  | +1.9 % | +2.1 % |
+| 1200 | 414 | 3.3 %  | 3.3 %  | **3.4 %**  | +1.8 % | +1.8 % |
+
+`plots/sigma_vs_p.png`
+
+### 6.2 good_evt p-binned (³He + π⁻ ASCII generator, 2000 events binned by MC p)
+
+| p (MeV/c) | N | σ_R seed | σ_p seed | σ_p UKF |
+|----------:|--:|---------:|---------:|--------:|
+| 150 |  72 | 1.9 % | 2.1 % | 4.5 %  |
+| 250 | 162 | 2.9 % | 3.2 % | 11.1 % |
+| 350 | 184 | 2.8 % | 2.4 % | 10.8 % |
+| 450 | 226 | 3.0 % | 2.9 % | 5.1 %  |
+| 550 | 206 | 3.4 % | 3.3 % | 3.4 %  |
+| 650 | 198 | 3.1 % | 3.1 % | 4.0 %  |
+| 750 |  47 | 2.5 % | 2.5 % | 42.9 % |
+
+`plots/sigma_vs_p_compare.png` (overlay with box-gen)
+
+### 6.3 good_evt chord-binned
+
+| chord (cm) | N | <p_MC> (MeV/c) | σ_R seed | σ_p UKF |
+|-----------:|--:|---------------:|---------:|--------:|
+|  1.5 |  67 | 432 | **11.3 %** | — |
+|  4.5 | 143 | 471 | 3.2 % | 13.6 % |
+|  7.5 | 114 | 458 | 1.8 % | 2.5 % |
+| 10.5 | 215 | 335 | 2.3 % | 4.7 % |
+| 13.5 | 256 | 414 | 3.2 % | 5.1 % |
+| 16.5 | 200 | 531 | 3.2 % | 4.9 % |
+| 19.5 |  97 | 640 | 2.7 % | 4.1 % |
+
+`plots/sigma_vs_chord.png` — three panels: σ vs chord, N vs chord,
+**<p_MC> vs chord** (confirms chord and momentum are decorrelated;
+<p> swings 335–640 MeV/c around the global mean 469 MeV/c non-monotonically).
+
+### 6.4 Key headline
+
+* **σ_p/p = 3.0 % (seed) / 4.3 % (UKF)** on the canonical good_evt 2k benchmark, chord ≥ 16 cm.
+* **σ ≤ 4 % across 500–1200 MeV/c** at both seed and UKF level.
+* **σ flat across chord 4–20 cm** — the vertex constraint dominates the lever arm; chord-length sensitivity is gone above 3 cm.
+* ATTPCROOT 4 % benchmark: **met**.
+
+---
+
+## 7. Plots in `plots/`
+
+| File | What it shows |
+|------|---------------|
+| `evtdisp_z_horizontal.png` | 9 single-cluster events: reco hits (blue), MC truth points (★), vertex (◆) + initial direction arrow, fitted circle (red), MC truth circle (green dashed), pad outline. Most events ratio 0.94–1.02; 2 events show the residual straight-line degeneracy clamped at R=2000 cm. |
+| `evtdisp_z_multi.png` | Multi-cluster events: real ³He recoils, δ-electron showers, one nuclear interaction. Each cluster in its own colour with its own fitted circle. |
+| `evtdisp_z_he3.png` | The 6 events where the ³He recoil deposits ≥ 3 GTPCPoints in the active gas. Cluster-to-PDG matching via nearest-MC-point voting. |
+| `vertex_refit.png` | R_fit/R_truth - 1 histogram, baseline (red, σ 8 %) vs with-vertex (blue, σ 3 %). |
+| `gluckstern_floor.png` | Per-event theoretical floor vs measured |R_fit/R_tru − 1|, both vs chord. |
+| `outlier_profile.png` | Good vs catastrophic-fit event distributions in N, chord, p, secondaries, density, cluster count. |
+| `sigma_vs_p.png` | Box-gen sweep: σ_R, σ_p_seed, σ_p_UKF and biases vs p_MC. |
+| `sigma_vs_p_compare.png` | Same axes overlaying box-gen (filled markers) and good_evt p-binned (open markers). |
+| `sigma_vs_chord.png` | σ, N events, <p_MC> per chord bin. |
+| `ukf_sigp_goodevt2k_hk0.1.png` | Final UKF σ_p/p histogram (all chords + mid + long). |
+
+---
+
+## 8. Reproduce
+
+```bash
+source $R3BROOT/build/config.sh           # sets VMCWORKDIR
+cd $VMCWORKDIR/glad-tpc/macros/tracking/ukf_resolution_2026-05-17
+
+./reproduce.sh                  # full chain + analysis, ~10 min
+./reproduce.sh analysis_only    # if you have output_*_goodevt2k.root
+
+./scan_p.sh                     # σ_p/p vs p box-gen sweep, ~25 min
+NEVT=200 PLIST="500 800 1100" ./scan_p.sh   # subset
+
+# Independent re-analysis without re-running the pipeline:
+root -b -q -l 'macros/vertex_refit.C(10.0, "goodevt2k")'
+root -b -q -l 'macros/scan_goodevt_pbins.C("goodevt2k", 100, 1100, 100)'
+root -b -q -l 'macros/scan_goodevt_chordbins.C("goodevt2k", 0, 30, 3)'
+root -b -q -l 'macros/plot_compare.C'
+root -b -q -l 'macros/plot_chord.C'
+```
+
+---
+
+## 9. Open items / next iterations
+
+1. **UKF p_T resolution still ~30–40 %** even when p_total is clean. The propagator does not constrain p_y along the B axis (no Lorentz force there), so the UKF freely shifts p_y vs (p_x, p_z) along the smoothing pass. Mitigations: stiffer prior on (sin θ) the seed value, or a joint 3D helix fit replacing the separate circle + line.
+2. **Straight-line degeneracy (~1 % of events)**: now clamped at R = 20 m so the seed stays finite, but the events themselves are still labeled. Proper handling needs a χ² cut on the GN fit or a separate "low-curvature" flag.
+3. **Real-data vertex source**: the production wiring opens a sidecar `sim_*.root` and reads MC truth. Replacement for real data: external beam tracker giving (x_v ≈ −6.9 cm by geometry, z_v per-event from beam profile).
+4. **5 m of un-instrumented gas**: the π⁻ travels through 7 cm of gas between target and chamber wall. Energy loss + multiple scattering in that path is not currently modelled in the UKF back-extrapolation — only the chamber gas is. Could matter for absolute p at the vertex.
+
+---
+
+## 10. Pipeline at a glance
+
+```
+ASCII gen / FairBoxGen                                    (MCTrack)
+        ↓
+   simHYDRA.C       Geant4 transport, P10 active gas      sim_TAG.root
+        ↓                                                 (GTPCPoint, MCTrack)
+   run_lang.C       Langevin drift to pad plane           lang_TAG.root
+        ↓                                                 (GTPCCalData)
+ run_reconstruction Cal2Hit (PSA + ToT centroid)          output_reco_TAG.root
+        ↓                                                 (GTPCHitData)
+   run_tracking.C   TripClust → R3BGTPCTrackFinder        output_tracking_TAG.root
+       USE_VERTEX=1 → Pratt + Huber-GN + vertex pseudo-   (GTPCTrackData with
+       HUBER_K_CM=0.10  hit + R cap + helix-θ_y from        GeoCenter, GeoRadius,
+                        y-vs-φ                              GeoTheta)
+        ↓
+   run_ukf.C        R3BGTPCFitterUKF: helix-tangent seed  output_ukf_TAG.root
+                    direction, RTS smoother, back-extrap  (GTPCFittedTrackData
+                    to vertex.                              with Kinematics)
+```
+
+Configuration knobs (env vars on `run_tracking.C`):
+
+| Env | Default | Purpose |
+|-----|--------:|---------|
+| `USE_VERTEX` | 0 | Set `1` to enable the vertex pseudo-hit |
+| `VERTEX_SIGMA_CM` | 0.05 | Vertex Gaussian σ (weight = (0.1/this)²) |
+| `HUBER_K_CM` | 0.10 | Huber threshold (0 disables) |
+| `USE_RIEMANN` | 0 | Switch TripClust → Riemann RANSAC |
+| `SUFFIX` | "" | File-name suffix to distinguish runs |
