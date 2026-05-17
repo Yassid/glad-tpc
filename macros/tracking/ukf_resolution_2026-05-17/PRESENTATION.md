@@ -9,12 +9,14 @@ R3B GLAD-TPC, port of OpenKF from ATTPCROOT, target σ_p/p ≤ 4 %.
 ATTPCROOT achieves σ_p/p ≈ 4 % on HYDRA-class TPCs. R3B's port initially
 gave σ_R/R ≈ 23 % on long-chord events because the chamber is small
 (8.8 × 25.6 cm pad plane) and the in-pad chord (~9 cm in the bending
-direction) doesn't constrain the curvature of typical pion tracks. Three
+direction) doesn't constrain the curvature of typical pion tracks. Four
 pipeline changes — a vertex pseudo-hit in the Pratt+GN seed fit, a
-helix-tangent UKF seed direction, and a Huber loss on the GN residuals —
-brought σ_p/p down to **3.0 % at seed level, 4.3 % at UKF level**, with
-the 4 % benchmark met across 500–1200 MeV/c on both single-π and
-realistic (³He + π⁻) good_evt samples.
+helix-tangent UKF seed direction, a Huber loss on the GN residuals, and
+a 1 mm Geant4 step limit in the P10 active gas (densifies MC truth so the
+Langevin digitizer lays drift electrons along the true curve) — brought
+σ_p/p down to **1.8 % at seed level, 4.0 % at UKF level**, with the 4 %
+benchmark met across 400–1200 MeV/c on both single-π and realistic
+(³He + π⁻) good_evt samples and the previous +2 % bias drift removed.
 
 ---
 
@@ -358,10 +360,17 @@ noisy $c_1 - c_0$ direction estimate the UKF used to take.
 
 ### 6.4 Key headline
 
-* **σ_p/p = 3.0 % (seed) / 4.3 % (UKF)** on the canonical good_evt 2k benchmark, chord ≥ 16 cm.
-* **σ ≤ 4 % across 500–1200 MeV/c** at both seed and UKF level.
+* **σ_p/p = 1.8 % (seed, bias −0.7 %) / 4.0 % (UKF, bias −1.1 %)** on the canonical good_evt 2k benchmark, chord ≥ 16 cm (N = 226), with STEMAX=0.1 cm in P10 gas (production default).
+* **σ ≤ 4 % across 400–1200 MeV/c** at both seed and UKF level (box-gen sweep).
+* **Bias drift across momentum removed** — previously +0.3 → +1.9 % across 400–1200 MeV/c; now flat at ±0.2 % per point (see `plots/sigma_vs_p_stemax_compare.png`). The single-bin good_evt UKF bias shifted +0.4 % → −1.1 % because half the previously-misbinned mid-chord events now sit in long with negative residual.
 * **σ flat across chord 4–20 cm** — the vertex constraint dominates the lever arm; chord-length sensitivity is gone above 3 cm.
 * ATTPCROOT 4 % benchmark: **met**.
+
+### 6.5 STEMAX caveat
+
+Without a Geant4 step limit on the P10 gas, MIP pions take ~3 cm process-limited steps → only 3–6 MC truth points per track. `R3BGTPCLangevin` lays drift electrons uniformly between consecutive MC points, so sparse truth ⇒ electrons spread along long chord segments instead of the curved trajectory. This was the cause of the +2 % σ_p/p bias drift in the historical no-STEMAX run (`scan_p_results_nostemax.csv`). Setting `GTPC_STEMAX_CM=0.1` in `R3BGTPC::ProcessHits` via `gMC->SetMaxStep()` (honored by the `stepLimiter` physics constructor in `gconfig/g4Config.C`) restores ~22× denser MC and collapses the bias. Slows simulation ~3×.
+
+Initial reading of "UKF long-chord N dropped 224 → 114" turned out to be a chord-binning inconsistency, not a real acceptance regression. `measure_ukf.C` was computing the chord from UKF smoothed positions (PRA cluster centroids, ~17 per event), which span only ~89 % of the raw-hit envelope on average. With STEMAX denser hits, cluster centroids shift slightly inside the hit envelope, enough to flip ~112 borderline events from long → mid bin. Fixed by switching `measure_ukf.C` to raw-hit chord (matches `vertex_refit.C`); all 226 long-raw events now appear in the long bin with UKF σ_p/p = 4.0 %, bias −1.1 %.
 
 ---
 
@@ -379,6 +388,8 @@ noisy $c_1 - c_0$ direction estimate the UKF used to take.
 | `sigma_vs_p_compare.png` | Same axes overlaying box-gen (filled markers) and good_evt p-binned (open markers). |
 | `sigma_vs_chord.png` | σ, N events, <p_MC> per chord bin. |
 | `ukf_sigp_goodevt2k_hk0.1.png` | Final UKF σ_p/p histogram (all chords + mid + long). |
+| `sigma_vs_p_stemax_compare.png` | Box-gen σ_p/p sweep with vs without STEMAX=0.1 — shows the bias-drift collapse. |
+| `evtdisp_mc_only_dense.png` | MC-only event display with STEMAX=0.1 — continuous truth arcs instead of 3–6 sparse stars. |
 
 ---
 
