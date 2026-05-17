@@ -95,7 +95,12 @@ class R3BGTPCTrack2Fit : public FairTask
     ROOT::Math::XYZVector fBField{ 0., 2.0, 0. }; // R3B GLAD dipole: B along +ŷ, 2 T
     double fMomentumSeed{ -1.0 };
     double fMeasSigma_mm{ 1.0 };
-    double fMomSigmaFrac{ 0.1 };
+    // Initial UKF momentum-prior fraction. With the vertex-constrained Pratt+GN
+    // seed delivering σ_R/R = 1.7 % on long-chord events, the AT-TPC-inherited
+    // 0.10 was a factor-5 too loose: it let the UKF drift downward on ~44 %
+    // of long-chord events, producing a wide non-Gaussian tail. 0.02 matches
+    // the actual seed quality and collapses the tail to ~6 %.
+    double fMomSigmaFrac{ 0.02 };
     int fMinClusters{ 5 };
     bool fEnableEnStraggling{ true };
     double fELossScaleFactor{ 1.0 };

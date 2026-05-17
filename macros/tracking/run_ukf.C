@@ -34,13 +34,11 @@ void run_ukf(TString fileName = "output_tracking.root", TString outName = "outpu
     fitTask->SetProjectile(1, 1, 0.1395);              // π± in u
     fitTask->SetBField({ 0., 2.0, 0. });  // T — R3B GLAD: horizontal dipole along +y
     fitTask->SetMeasurementSigma(1.0);
-    // Tight momentum prior — the data informationally can't move p far from
-    // the seed (sagitta < noise over 9 cm chord), so loosening the prior just
-    // adds variance. Override via MOM_SIGMA_FRAC env var for scans.
-    double momSig = 0.1;
+    // Optional override only. Default comes from R3BGTPCTrack2Fit (0.02,
+    // matched to the vertex-constrained seed's σ_R/R = 1.7 % on long chord).
+    // A wider prior lets the UKF drift below the seed on ~44 % of events.
     if (const char* e = gSystem->Getenv("MOM_SIGMA_FRAC"); e && std::atof(e) > 0)
-        momSig = std::atof(e);
-    fitTask->SetMomentumSigmaFrac(momSig);
+        fitTask->SetMomentumSigmaFrac(std::atof(e));
     // Seed override: SEED_P_MEV env var sets a fixed initial momentum
     // (overrides Brho from PRA). Useful for diagnosing whether σ_p/p
     // is seed-limited vs measurement-limited in small chambers.
