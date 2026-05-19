@@ -501,15 +501,19 @@ $\langle p_{\text{MC}}\rangle$ overlay (bottom): chord and momentum decorrelated
 \end{frame}
 
 % ------------------------------------------------------------------
-\begin{frame}{Backup -- robustness of the $\sigma$ estimator}
+\begin{frame}{Backup -- robustness of $\sigma$ across $p$}
 \centering
-\includegraphics[height=0.65\textheight,keepaspectratio]{robustness_check}\\[0.1em]
+\includegraphics[height=0.66\textheight,keepaspectratio]{robustness_vs_p}\\[0.2em]
 \scriptsize
-\textcolor{red}{Gaussian core}: $\sigma$ of a Gauss fit on $[-0.4,\,0.4]$.\quad
-\textcolor{blue}{Truncated RMS}: std-dev in $[\mu \pm 3\sigma_\text{core}]$.\quad
-\textcolor{good}{$(q_{84}-q_{16})/2$}: quantile half-width.\\[0.1em]
-\small
-The choice moves $\sigma$ by $<1$ pp; the quoted \textbf{2.9 \%} is the tightest -- conservative within the band.
+\textcolor{red}{Gauss core} on $[-0.4,\,0.4]$,\quad
+\textcolor{blue}{trunc.\ RMS} on $[\mu \pm 3\sigma_\text{core}]$,\quad
+\textcolor{good}{$(q_{84}-q_{16})/2$}.\\[0.1em]
+\textbf{$p \ge 800$ MeV/c: three estimators collapse} (q/core $\approx 1.01$);
+plateau is genuinely Gaussian.
+At 400--700 the quantile is 15--34 \% wider than the core --
+\textbf{400 MeV/c is closer to 5 \% than 3.8 \%}.
+\textcolor{warn}{Gluckstern $\sigma\propto p$ (dashed)} overshoots by
+$5\times$ at 1200: seed is angle-limited (vertex pseudo-hit), not sagitta-limited.
 \end{frame}
 
 % ------------------------------------------------------------------
