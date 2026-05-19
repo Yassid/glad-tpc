@@ -1,0 +1,540 @@
+% UKF Momentum Reconstruction on HYDRA Prototype -- 10-min internal status
+% IGFAE-styled Beamer deck.
+% Compile: pdflatex main.tex
+\documentclass[aspectratio=169]{beamer}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+
+% ----- IGFAE brand palette -----
+\definecolor{igfaenavy}{HTML}{14163C}
+\definecolor{igfaegold}{HTML}{C9B870}
+\definecolor{igfaeink}{HTML}{1A1A2E}
+\definecolor{good}{HTML}{1f7a1f}
+\definecolor{warn}{HTML}{a05e1a}
+
+% ----- Beamer theme settings -----
+\useoutertheme{infolines}
+\setbeamertemplate{navigation symbols}{}
+
+% Body / structure colors
+\setbeamercolor{normal text}{fg=igfaeink, bg=white}
+\setbeamercolor{structure}{fg=igfaenavy}
+\setbeamercolor{alerted text}{fg=warn}
+\setbeamercolor{example text}{fg=good}
+\setbeamercolor{title}{fg=igfaenavy}
+\setbeamercolor{author}{fg=igfaeink}
+\setbeamercolor{institute}{fg=igfaeink}
+\setbeamercolor{date}{fg=igfaeink}
+\setbeamercolor{frametitle}{bg=igfaenavy, fg=white}
+\setbeamercolor{block title}{bg=igfaenavy!10, fg=igfaenavy}
+\setbeamercolor{block body}{bg=igfaenavy!5, fg=igfaeink}
+\setbeamercolor{itemize item}{fg=igfaenavy}
+\setbeamercolor{itemize subitem}{fg=igfaenavy}
+\setbeamercolor{enumerate item}{fg=igfaenavy}
+\setbeamercolor{footline}{fg=igfaenavy, bg=white}
+
+\setbeamerfont{frametitle}{size=\large, series=\bfseries}
+\setbeamerfont{title}{size=\LARGE, series=\bfseries}
+\setbeamerfont{author}{size=\normalsize}
+\setbeamerfont{institute}{size=\small}
+\setbeamerfont{block title}{series=\bfseries}
+
+% Bullet markers as small navy squares
+\setbeamertemplate{itemize item}{\raisebox{0.25ex}{\tiny$\blacksquare$}}
+\setbeamertemplate{itemize subitem}{\raisebox{0.25ex}{\tiny$\blacktriangleright$}}
+
+% ----- Frame title bar with IGFAE logo on the right -----
+\setbeamertemplate{frametitle}{%
+  \nointerlineskip
+  \begin{beamercolorbox}[wd=\paperwidth, ht=2.7ex, dp=1.4ex, leftskip=0.4cm, rightskip=2.6cm]{frametitle}
+    \strut\insertframetitle\strut
+  \end{beamercolorbox}%
+  \begin{tikzpicture}[remember picture, overlay]
+    \node[anchor=north east, inner sep=2pt] at ([xshift=-0.15cm, yshift=-0.10cm]current page.north east)
+      {\igfaeRoundel};
+  \end{tikzpicture}%
+}
+
+% ----- Footer: short title (left) / author (center) / page (right) -----
+\setbeamertemplate{footline}{%
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=.34\paperwidth, ht=2.25ex, dp=1ex, leftskip=0.4cm]{footline}%
+      \tiny\color{igfaenavy}\insertshorttitle%
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.34\paperwidth, ht=2.25ex, dp=1ex, center]{footline}%
+      \tiny\color{igfaenavy}\insertshortauthor%
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.32\paperwidth, ht=2.25ex, dp=1ex, rightskip=0.4cm]{footline}%
+      \hfill\tiny\color{igfaenavy}\insertframenumber\,/\,\inserttotalframenumber%
+    \end{beamercolorbox}%
+  }%
+  \vskip0pt%
+}
+
+\graphicspath{{plots/}{logos/}}
+
+% IGFAE roundel only. logos/igfae_logo.png is the full wordmark; pdftex
+% reads it as 414.6 pt x 82.9 pt. The roundel occupies roughly the
+% leftmost 24% (~100 pt). Use viewport to keep just the roundel column.
+\newcommand{\igfaeRoundel}[1][0.9cm]{%
+  \includegraphics[height=#1, viewport=0 0 100 83, clip]{logos/igfae_logo.png}%
+}
+
+\title[HYDRA UKF status]{UKF Momentum Reconstruction on HYDRA Prototype}
+\subtitle{Status update -- R3B GLAD-TPC}
+\author[Y. Ayyad]{Yassid Ayyad}
+\institute{IGFAE, Universidade de Santiago de Compostela}
+\date{\today}
+
+\begin{document}
+
+% ----- Custom title slide using the IGFAE banner -----
+{
+\setbeamertemplate{footline}{}
+\begin{frame}[plain]
+  \begin{tikzpicture}[remember picture, overlay]
+    % Top: IGFAE 25th-anniversary banner
+    \node[anchor=north west, inner sep=0] at ([xshift=0.6cm, yshift=-0.6cm]current page.north west)
+      {\includegraphics[height=1.4cm]{logos/igfae_banner.png}};
+    % Maria de Maeztu seal, smaller, top right
+    \node[anchor=north east, inner sep=0] at ([xshift=-0.6cm, yshift=-0.4cm]current page.north east)
+      {\includegraphics[height=1.6cm]{logos/maria_de_maeztu.png}};
+    % Navy accent bar under banner
+    \draw[igfaenavy, line width=2pt]
+      ([xshift=0.6cm, yshift=-2.3cm]current page.north west)
+      -- ([xshift=-0.6cm, yshift=-2.3cm]current page.north east);
+    % Title block — anchored top-left below the navy rule so the rule
+    % never intersects the multi-line title.
+    \node[anchor=north west, text width=14.0cm, inner sep=0] at ([xshift=0.8cm, yshift=-3.2cm]current page.north west) {%
+      {\color{igfaenavy}\LARGE\bfseries UKF Momentum Reconstruction\\on HYDRA Prototype}\\[0.6em]
+      {\color{igfaeink}\large Status update -- R3B GLAD-TPC}\\[1.4em]
+      {\color{igfaeink}\large Yassid Ayyad}\\[0.2em]
+      {\color{igfaeink}\small IGFAE, Universidade de Santiago de Compostela}\\[0.4em]
+      {\color{igfaeink}\small \today}%
+    };
+    % Funder strip across bottom
+    \node[anchor=south, inner sep=0] at ([yshift=0.4cm]current page.south)
+      {\includegraphics[width=14.5cm]{logos/funders_strip.png}};
+  \end{tikzpicture}
+\end{frame}
+}
+
+% ------------------------------------------------------------------
+\begin{frame}{Where we are}
+\begin{itemize}
+  \item OpenKF (ATTPCROOT) ported into \texttt{R3BRoot/glad-tpc} as a single-$\pi$ sandbox.
+  \item Target: $\sigma_p / p \le 4\,\%$ (ATTPCROOT benchmark).
+  \item Initial port: $\sigma_R / R \approx 23\,\%$ -- chamber too small for in-pad curvature alone.
+  \item Six pipeline changes -- breakthrough: \textbf{vertex pseudo-hit} in the seed.
+\end{itemize}
+\vfill
+\begin{block}{Headline (good\_evt 2k, chord $\ge 16$ cm, $N=222$)}
+\centering\large
+$\sigma_R/R = \mathbf{1.7\,\%}$ \quad
+$\sigma_{p,\text{seed}}/p = \mathbf{1.8\,\%}$ \quad
+$\sigma_{p,\text{UKF}}/p = \mathbf{2.9\,\%}$
+\end{block}
+\centering
+\scriptsize
+\begin{tabular}{@{}ll@{}}
+$\sigma_R/R$            & circle-fit radius resolution from Pratt+GN+vertex \\
+$\sigma_{p,\text{seed}}$ & $p$ from $R$ and pitch $\theta_y$ (no UKF) \\
+$\sigma_{p,\text{UKF}}$  & $p_\text{total}$ from the full filter state \\
+\end{tabular}\\[0.3em]
+\small
+\textcolor{good}{$\sigma \le 4\,\%$ met across 400--1200 MeV/c, both at seed and UKF.}
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Geometry -- why the chamber is hard}
+HYDRA Prototype, chamber-local frame:
+\begin{itemize}
+  \item Pad plane $8.8 \times 25.6$ cm (bending $\times$ beam).
+  \item $\vec{B} = (0, 2~\text{T}, 0)$ -- GLAD horizontal dipole. Bending plane $(x, z)$.
+  \item Target (LH$_2$) at local $(-6.9, 0, -33.2)$ cm:
+        \textbf{6.9 cm outside the pad-plane in $x$.}
+\end{itemize}
+\vfill
+\begin{columns}[c,onlytextwidth]
+\column{0.55\textwidth}
+\centering
+\textbf{Sagitta vs hit noise}\\($p = 800$ MeV/c $\pi^-$, in-pad only)\\[0.4em]
+\large
+\begin{tabular}{lr}
+\toprule
+$R = p_T / (0.3 B)$  & 133 cm \\
+$L$ (in-pad chord)   & 9 cm \\
+$s = L^2/(8R)$       & \textbf{0.76 mm} \\
+$\sigma_{xy}$        & $\sim 1$ mm \\
+\bottomrule
+\end{tabular}
+\column{0.45\textwidth}
+\textcolor{warn}{\textbf{The curvature signal is below the hit noise.}}\\[0.6em]
+No circle fit on in-pad hits alone can resolve $R$ to better than tens of \%.\\[0.8em]
+\scriptsize
+$s$ (sagitta) = max perpendicular distance from chord to arc;\\
+$p_T = p\sin\theta_y$ since $\vec{B}\,\|\,\hat{y}$.
+\end{columns}
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{The lever -- Gluckstern's bound}
+For $N$ hits with noise $\sigma_{xy}$ along chord $L$:
+\[
+  \boxed{\;\frac{\sigma_R}{R} \;=\; \frac{R\,\sigma_{xy}}{L^2}\sqrt{\frac{720}{N}}\;}
+\]
+\vspace{-0.5em}
+
+\scriptsize
+\begin{columns}[t,onlytextwidth]
+\column{0.48\textwidth}
+\begin{tabular}{@{}ll@{}}
+$\sigma_R/R$ & fractional radius resolution (= $\sigma_p/p$ in $B$-uniform) \\
+$R$          & track radius; $R = p_T / (0.3 B)$ [cm, MeV/c, T] \\
+$\sigma_{xy}$ & hit resolution in the bending $(x,z)$ plane, $\approx 1$ mm \\
+\end{tabular}
+\column{0.48\textwidth}
+\begin{tabular}{@{}ll@{}}
+$L$ & chord length (first hit $\to$ last hit) in $(x,z)$ \\
+$N$ & number of hits used in the fit \\
+720 & integration constant for uniform sampling \\
+\end{tabular}
+\end{columns}
+\vspace{0.3em}
+
+\begin{center}
+\large
+\begin{tabular}{lcc}
+\toprule
+$L$                              & Gluckstern floor & measured \\
+\midrule
+9 cm (in-pad only)               & 44 \%          & 22.6 \% (baseline) \\
+\textbf{16 cm (in-pad + vertex)} & \textbf{14 \%} & \textbf{3.1 \%} \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.3em}
+
+$\sigma_R \propto R / L^2$. \textbf{Doubling $L$ drops the floor 4$\times$.}
+One pseudo-hit at the target $\Rightarrow$ \textbf{3$\times$ resolution gain} in practice.
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Pipeline -- key changes vs naive port}
+\small
+\begin{tabular}{ll}
+\toprule
+\textbf{Stage} & \textbf{Change} \\
+\midrule
+sim (Geant4) & \texttt{GTPC\_STEMAX\_CM=0.1} $\Rightarrow{\sim}22\times$ denser MC \\
+TripClust    & \texttt{fMinClusters}\ 5 $\to$ \textbf{3} (low-$p$ recovery) \\
+Circle seed  & Pratt + Gauss--Newton + \textbf{vertex pseudo-hit} + Huber \\
+$\theta_y$   & helix pitch from $y$-vs-$\varphi$ linear fit \\
+UKF (OpenKF) & helix-tangent seed dir; \texttt{fMomSigmaFrac}\ 0.10 $\to$ \textbf{0.02} \\
+\bottomrule
+\end{tabular}
+\vspace{0.4em}
+
+\textbf{Vertex pseudo-hit} -- the breakthrough:
+\vspace{-0.3em}
+\[
+  \chi^2 = \sum_{i} r_i^2 + w_v\, r_v^2,
+  \quad
+  r_v = \sqrt{(x_v - c_x)^2 + (z_v - c_z)^2} - R,
+  \quad
+  w_v = (\sigma_{xy}/\sigma_v)^2
+\]
+\vspace{-0.5em}
+
+\scriptsize
+\begin{columns}[t,onlytextwidth]
+\column{0.48\textwidth}
+\begin{tabular}{@{}l p{4.5cm}@{}}
+$r_i = d_i - R$ & hit geometric residual; $d_i = \sqrt{(x_i{-}c_x)^2{+}(z_i{-}c_z)^2}$ \\
+$r_v$           & same form, at the vertex \\
+$(x_v, z_v)$    & vertex in chamber-local; $x_v = -6.9$ cm fixed by geometry \\
+$(c_x, c_z), R$ & fitted circle centre + radius (3 free GN params) \\
+\end{tabular}
+\column{0.48\textwidth}
+\begin{tabular}{@{}l p{4.0cm}@{}}
+$w_v$        & vertex weight vs one hit \\
+$\sigma_{xy} \approx 1$ mm & reco hit resolution in $(x,z)$ \\
+$\sigma_v \approx 0.5$ mm  & beam-spot width \\
+$\Rightarrow w_v = 4$ & vertex counts as 4 hits in the GN sum \\
+\end{tabular}
+\end{columns}
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Seed fit -- four ingredients}
+\small
+\begin{columns}[t,onlytextwidth]
+\column{0.50\textwidth}
+\textbf{1. Pratt's algebraic circle fit} \\
+Closed-form: cubic in a Lagrange multiplier (Chernov ch.\,5). \\
+\textcolor{good}{Unbiased to leading order in $\sigma_{xy}/L$.}
+Naive Kasa biases $R$ low by $\sim 40\,\%$ when sagitta $\approx$ hit noise.
+\vspace{0.6em}
+
+\textbf{2. Gauss--Newton refinement} \\
+Minimises the \emph{geometric} cost
+\[
+  \chi^2 = \sum_i (d_i - R)^2, \quad d_i = \sqrt{(x_i-c_x)^2 + (z_i-c_z)^2}
+\]
+2--5 iterations from the Pratt seed.
+
+\column{0.50\textwidth}
+\textbf{3. Vertex pseudo-hit} \\
+One residual at the known target, weight $w_v = (\sigma_{xy}/\sigma_v)^2 = 4$. \\
+Effective chord $9 \to 16$ cm
+$\Rightarrow$ \textcolor{good}{\textbf{3$\times$ tighter $R$}} (Gluckstern $1/L^2$).
+\vspace{0.6em}
+
+\textbf{4. Huber loss} \\
+Per-hit weight in the GN sum:
+\[
+  w_i(r_i) = \min(1,\;k/|r_i|), \quad k = 0.10~\text{cm}
+\]
+Outliers ($\delta$-electrons, mis-clusterings) down-weighted $\propto 1/|r|$
+instead of pulling the fit as $r^2$.
+
+\end{columns}
+\vspace{0.4em}
+
+\scriptsize
+\textit{All four feed the same $(c_x, c_z, R)$ minimisation.}
+The Pratt seed makes the GN converge in $\le 5$ steps;
+the vertex adds the lever arm;
+Huber catches what neither sees.
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Event displays -- single-cluster fits}
+\centering
+\includegraphics[height=0.78\textheight,keepaspectratio]{evtdisp_z_horizontal}\\[0.2em]
+\scriptsize
+9 events. Blue: reco hits. \textcolor{red}{Red}: fitted circle (Pratt+GN + vertex).
+\textcolor{good}{Green dashed}: MC truth. $\blacklozenge$: vertex pseudo-hit.
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Event displays -- multi-cluster events}
+\centering
+\includegraphics[height=0.78\textheight,keepaspectratio]{evtdisp_z_multi}\\[0.2em]
+\scriptsize
+Real-event quality. $^3$He recoils, $\delta$-electron showers, one nuclear interaction.
+Each cluster gets its own colour + fitted circle.
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Headline -- $\sigma_p/p$ vs $p$}
+\centering
+\includegraphics[width=0.92\linewidth]{sigma_vs_p}\\[0.1em]
+\scriptsize
+\begin{tabular}{@{}ll@{}}
+$\sigma_R/R$ (\textcolor{blue}{$\bullet$})           & seed circle-fit radius resolution \\
+$\sigma_p/p$ seed (\textcolor{good}{$\blacksquare$}) & $p$ from $R$ and $\theta_y$ at seed level \\
+$\sigma_{p_\text{tot}}/p_\text{tot}$ UKF (\textcolor{red}{$\blacktriangle$}) & UKF total momentum \\
+\end{tabular}\\[0.1em]
+\small
+Box-gen $\pi^-$ sweep, 500 evt/point. \textbf{$\sigma \le 4\,\%$ across 400--1200 MeV/c.}
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Where the $\sigma$ comes from -- $p_\text{fit}/p_\text{MC} - 1$}
+\centering
+\includegraphics[width=0.95\linewidth]{ukf_sigp_goodevt2k_hk0.1}\\[0.2em]
+\scriptsize
+\begin{tabular}{@{}ll@{}}
+$p_\text{fit}$  & UKF $p_\text{total}$ at the first cluster \\
+$p_\text{MC}$   & true primary $|\vec{p}|$ from \texttt{R3BMCTrack} \\
+chord           & raw-hit $(x,z)$ span; long $\geq 16$ cm \\
+red curve       & Gaussian fit to the core in $[-0.4,\,0.4]$ \\
+\end{tabular}\\[0.1em]
+\small
+\textbf{good\_evt 2k}. Panels: all / mid 8--16 / long $\geq 16$ cm. $\sigma$ on the long panel = headline \textbf{2.9 \%}.
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Per-momentum distributions -- box-gen sweep}
+\begin{columns}[c,onlytextwidth]
+\column{0.55\textwidth}
+\includegraphics[width=\linewidth]{residual_overlay_p}
+\column{0.45\textwidth}
+\large
+Box-gen $\pi^-$ at five momenta, log $y$.\\[0.6em]
+$p_\text{UKF}/p_\text{MC} - 1$, overlaid.\\[0.6em]
+Cores all sit at zero; tails decrease with $p$.\\[0.6em]
+\small
+400 MeV/c: short chord (5--7 cm) $\to$ visibly wider tail and fewer events.\\
+600--1200 MeV/c: clean unimodal cores.\\
+This is the data behind the right-hand column of the previous plot.
+\end{columns}
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Reconstruction efficiency vs $p$}
+\begin{columns}[c,onlytextwidth]
+\column{0.62\textwidth}
+\includegraphics[width=\linewidth]{efficiency_vs_p}
+\column{0.38\textwidth}
+\large
+Box-gen $\pi^-$, 500 evt/point.\\[0.5em]
+Three pipeline stages, each $/$ generated:\\[0.3em]
+\small
+\textcolor{blue}{$\geq 1$ reco hit} -- chamber acceptance.\\[0.3em]
+\textcolor{orange}{$\geq 1$ seed} -- TripletClust + Pratt+GN.\\[0.3em]
+\textcolor{good}{UKF converged} -- final fit.
+\vspace{0.6em}
+
+\textbf{Plateau $\geq 800$ MeV/c} at $\sim 95\,\%$.\\[0.2em]
+$\leq 200$ MeV/c: $\pi^-$ deflects out before chamber.
+\end{columns}
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Vertex constraint -- $R_{\text{fit}}/R_{\text{truth}} - 1$}
+\begin{columns}[c,onlytextwidth]
+\column{0.6\textwidth}
+\includegraphics[width=\linewidth]{vertex_refit}
+\column{0.4\textwidth}
+\large
+\textcolor{red}{Red}: hits only, $\sigma = 8\,\%$.\\[0.4em]
+\textcolor{blue}{Blue}: with vertex, $\sigma = 3\,\%$.\\[0.8em]
+\textbf{One pseudo-hit $\Rightarrow$ 3$\times$ tighter}, exactly as Gluckstern predicts.
+\end{columns}
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{The hidden tail -- UKF momentum prior}
+\begin{columns}[c,onlytextwidth]
+\column{0.62\textwidth}
+\includegraphics[width=\linewidth]{ukf_tail_probe}
+\column{0.38\textwidth}
+\centering
+\large
+\begin{tabular}{rr}
+\toprule
+prior         & tail \\
+\midrule
+0.10          & 44 \% \\
+0.05          & 35 \% \\
+0.03          & 23 \% \\
+\textbf{0.02} & \textbf{6 \%} \\
+\bottomrule
+\end{tabular}\\[0.6em]
+\texttt{fMomSigmaFrac}\\$0.10 \to 0.02$\\[0.3em]
+median $p/p_{\text{MC}}$:\\
+$0.66 \to 0.98$
+\end{columns}
+\vspace{-0.2em}
+
+\scriptsize
+prior $=$ \texttt{fMomSigmaFrac}; tail $=$ fraction with $|p_\text{UKF}/p_\text{MC}-1| > 0.1$.
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Low-$p$ acceptance edge -- \texttt{fMinClusters}}
+\begin{columns}[c,onlytextwidth]
+\column{0.66\textwidth}
+\includegraphics[width=\linewidth]{accept_400}
+\column{0.34\textwidth}
+\centering
+\large
+\begin{tabular}{rrr}
+\toprule
+$p$ & MIN$=5$ & MIN$=\mathbf{3}$ \\
+\midrule
+400  & 42.0 \% & \textbf{3.8 \%} \\
+500  & 2.4 \%  & 2.8 \% \\
+600  & 2.2 \%  & 2.5 \% \\
+700+ & \multicolumn{2}{c}{unchanged} \\
+\bottomrule
+\end{tabular}\\[0.6em]
+\small
+At 400 MeV/c, MIN$=5$ rejected 98 \% of seeds before the UKF. Lowering to 3 recovers the bin.
+\end{columns}
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Caveat -- Geant4 step limit in P10}
+\begin{columns}[c,onlytextwidth]
+\column{0.6\textwidth}
+\includegraphics[width=\linewidth]{sigma_vs_p_stemax_compare}
+\column{0.4\textwidth}
+\large
+Without a step limit: only 3--6 MC truth points per track. Langevin then spreads drift
+electrons uniformly between them $\Rightarrow$ along chord, not the curve.\\[0.6em]
+\textbf{\texttt{GTPC\_STEMAX\_CM=0.1}}\\
+$\Rightarrow \sim 22\times$ denser MC.\\
+Removes $+2\,\%$ bias drift.\\
+Slows sim $\sim 3\times$.
+\end{columns}
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Open items}
+\begin{enumerate}
+  \item \textbf{Real-data vertex source}: external beam tracker replaces MC sidecar. $x_v \approx -6.9$ cm fixed by geometry.
+  \item \textbf{Below 400 MeV/c}: TripClust short-chord ceiling. 2-cluster fitter or revisit thresholds.
+  \item \textbf{Un-instrumented gas} ($\sim 7$ cm target $\to$ chamber): $dE/dx$ + MS not in UKF back-extrap; $<1\,\%$ for MIP $\pi$.
+  \item \textbf{Straight-line degeneracy} ($\sim 1\,\%$): clamped at $R = 20$ m. Wants a $\chi^2$ cut or low-curvature flag.
+\end{enumerate}
+\vfill
+\centering\small
+Writeup: \texttt{ukf\_resolution\_2026-05-17/PRESENTATION.md}\hspace{1em}Reproduce: \texttt{./reproduce.sh}
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Backup -- $\sigma$ vs chord (good\_evt 2k)}
+\centering
+\includegraphics[width=0.85\linewidth]{sigma_vs_chord}\\[0.4em]
+\large
+$\sigma_R/R$ flat at 2--3 \% across chord 4--20 cm: vertex dominates the lever arm.
+$\langle p_{\text{MC}}\rangle$ overlay (bottom): chord and momentum decorrelated.
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Backup -- robustness of the $\sigma$ estimator}
+\centering
+\includegraphics[height=0.65\textheight,keepaspectratio]{robustness_check}\\[0.1em]
+\scriptsize
+\textcolor{red}{Gaussian core}: $\sigma$ of a Gauss fit on $[-0.4,\,0.4]$.\quad
+\textcolor{blue}{Truncated RMS}: std-dev in $[\mu \pm 3\sigma_\text{core}]$.\quad
+\textcolor{good}{$(q_{84}-q_{16})/2$}: quantile half-width.\\[0.1em]
+\small
+The choice moves $\sigma$ by $<1$ pp; the quoted \textbf{2.9 \%} is the tightest -- conservative within the band.
+\end{frame}
+
+% ------------------------------------------------------------------
+\begin{frame}{Backup -- MC truth density (STEMAX)}
+\centering
+\includegraphics[height=0.78\textheight,keepaspectratio]{evtdisp_mc_only_dense}\\[0.2em]
+\small
+\texttt{GTPC\_STEMAX\_CM=0.1}: continuous truth arc instead of 3--6 sparse stars.
+\end{frame}
+
+% ----- Closing slide: thanks + funders -----
+{
+\setbeamertemplate{footline}{}
+\begin{frame}[plain]
+  \begin{tikzpicture}[remember picture, overlay]
+    \node[anchor=center, inner sep=0] at ([yshift=1.6cm]current page.center)
+      {\igfaeRoundel[2.0cm]};
+    \node[anchor=center] at ([yshift=-0.4cm]current page.center)
+      {\color{igfaenavy}\Huge\bfseries Thank you};
+    \node[anchor=center] at ([yshift=-1.4cm]current page.center)
+      {\color{igfaeink}\large Questions?};
+    \node[anchor=south, inner sep=0] at ([yshift=0.4cm]current page.south)
+      {\includegraphics[width=14.5cm]{logos/funders_strip.png}};
+  \end{tikzpicture}
+\end{frame}
+}
+
+\end{document}
